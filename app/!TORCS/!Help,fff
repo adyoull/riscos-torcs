@@ -15,8 +15,8 @@ Requirements
 
 Everything is drawn by software OpenGL (riscos-mesa) on the CPU, so the
 fewer pixels it draws, the faster it runs. The first time it runs, TORCS
-fills the screen with a picture drawn at a reduced size (360 pixels high,
-in the screen's shape: 640x360 on a 16:9 screen) and stretched over the
+fills the screen with a picture drawn at a reduced size (540 pixels high,
+in the screen's shape: 960x540 on a 16:9 screen) and stretched over the
 screen, by the Pi's display hardware where the VideoOverlay module is
 loaded (!Run loads it if it's in !System). Other programs keep running
 underneath.
@@ -45,7 +45,11 @@ Options
 -------
 - Options > Display: the drawing size and Full-screen or Window mode.
   In full screen the size is what's drawn and then stretched; pick one in
-  your screen's shape (4:3: 480x360; 16:10: 576x360; 16:9: 640x360).
+  your screen's shape. Smaller is faster, bigger is sharper; below 480
+  high the writing gets blocky.
+    4:3    480x360  640x480  720x540
+    16:10  576x360  768x480  864x540  1152x720
+    16:9   640x360  856x480  960x540  1280x720
   TORCS saves the setting and quits; start it again to use it.
 - Options > Graphic Configuration: visibility, smoke, skid marks, wheels
   and the sky background (the panorama around the track; off by default:

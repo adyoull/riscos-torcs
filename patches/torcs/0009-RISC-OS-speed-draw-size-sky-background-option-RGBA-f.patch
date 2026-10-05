@@ -6,12 +6,14 @@ Subject: [PATCH] RISC OS: speed: draw size, sky background option, RGBA fonts
 Pi result of m1-1: 4.8 fps in a 640x480 window. Most of a frame is
 filling pixels, so:
 - riscosplatform.cpp: on the first run, screen.xml is set to full screen
-  at a draw size in the screen's shape, 360 pixels high (576x360 on a
-  16:10 screen, 640x360 on 16:9). TORCS's full screen is GLUT's game
+  at a draw size in the screen's shape, 540 pixels high (864x540 on a
+  16:10 screen, 960x540 on 16:9; 360 high, tried first, made the text
+  too pixelated: TORCS lays text out for 640x480). TORCS's full screen is GLUT's game
   mode, which riscos-mesa's freeglut draws at the requested size and
   stretches over the screen, through a hardware overlay where there is
   one.
-- screen.cpp: Display sizes in 16:10 and 16:9 shapes too.
+- screen.cpp: Display sizes in 16:10 and 16:9 shapes too (up to 540 and
+  720 high).
 - Graphic Configuration: "Sky background" (graph.xml "sky background",
   default yes). The panorama is a whole screen of textured pixels drawn
   before the scene every frame (18% of a host profile frame); without it
@@ -30,11 +32,11 @@ filling pixels, so:
  src/libs/confscreens/graphconfig.cpp      |  47 ++++++++++
  src/libs/tgfclient/guifont.cpp            |  29 ++++++
  src/libs/tgfclient/screen.cpp             |   6 +-
- src/linux/riscosplatform.cpp              | 103 +++++++++++++++++++++-
+ src/linux/riscosplatform.cpp              | 104 +++++++++++++++++++++-
  src/modules/graphic/ssggraph/grmain.cpp   |   8 ++
  src/modules/graphic/ssggraph/grmain.h     |   1 +
  src/modules/graphic/ssggraph/grscreen.cpp |   4 +-
- 8 files changed, 195 insertions(+), 6 deletions(-)
+ 8 files changed, 196 insertions(+), 6 deletions(-)
 
 diff --git a/src/interfaces/graphic.h b/src/interfaces/graphic.h
 index 9ff01ff..08ec640 100644
@@ -180,7 +182,7 @@ index b47364a..78fdf5f 100644
  	//Clean up
  	free(TexBytes);
 diff --git a/src/libs/tgfclient/screen.cpp b/src/libs/tgfclient/screen.cpp
-index 53d966c..ea8cf7e 100644
+index 53d966c..9d7e746 100644
 --- a/src/libs/tgfclient/screen.cpp
 +++ b/src/libs/tgfclient/screen.cpp
 @@ -78,7 +78,11 @@ static int nbRes = 0;
@@ -191,13 +193,13 @@ index 53d966c..ea8cf7e 100644
 +// In full screen this is the size drawn (and stretched over the screen):
 +// sizes in the screen's shape (4:3, 16:10, 16:9) keep the picture in shape.
 +static char	*Res[] = {"320x240", "400x300", "480x360", "512x384", "640x480", "800x600", "1024x768",
-+	"384x240", "576x360", "640x400", "768x480", "1024x640",
-+	"432x240", "640x360", "768x432", "856x480", "1280x720", "1280x1024", "1600x900", "1920x1080"};
++	"720x540", "384x240", "576x360", "640x400", "768x480", "864x540", "1024x640", "1152x720",
++	"432x240", "640x360", "768x432", "856x480", "960x540", "1280x720", "1280x1024", "1600x900", "1920x1080"};
  static const int nbRes = sizeof(Res) / sizeof(Res[0]);
  #else // USE_RANDR_EXT
  static char	*Res[] = {"640x480", "800x600", "1024x768", "1152x768", "1152x864", "1200x854", "1200x960", "1280x720", "1280x1024", "1400x900", "1600x900", "1600x1200", "1680x1050", "1920x1200", "320x200"};
 diff --git a/src/linux/riscosplatform.cpp b/src/linux/riscosplatform.cpp
-index 6e5c828..b01a1cf 100644
+index 6e5c828..2966f62 100644
 --- a/src/linux/riscosplatform.cpp
 +++ b/src/linux/riscosplatform.cpp
 @@ -140,9 +140,7 @@ copyFile(const char *from, const char *to)
@@ -211,7 +213,7 @@ index 6e5c828..b01a1cf 100644
  static const char *const configFiles[] = {
  	"config/raceengine.xml",
  	"config/style.xsl",
-@@ -161,12 +159,93 @@ static const char *const configFiles[] = {
+@@ -161,12 +159,94 @@ static const char *const configFiles[] = {
  	NULL
  };
  
@@ -224,8 +226,9 @@ index 6e5c828..b01a1cf 100644
 +   screen.xml x and y) and stretched by a hardware overlay (VideoOverlay on
 +   a Pi) or by the plot. Drawing time grows with the number of pixels, so
 +   this is the biggest speed setting there is. The size has the screen's
-+   shape (so the picture isn't stretched out of shape) and is 360 pixels
-+   high. Options > Display changes it; "Window mode" there gives a window
++   shape (so the picture isn't stretched out of shape) and is 540 pixels
++   high: TORCS lays its text out for 640x480, and drawn much smaller than
++   that, letters lose rows and columns (360 high was too pixelated). Options > Display changes it; "Window mode" there gives a window
 +   of that size instead. */
 +static void
 +riscosScreenDefaults(const char *path)
@@ -243,10 +246,10 @@ index 6e5c828..b01a1cf 100644
 +	if (_kernel_swi(0x35, &r, &r) == NULL && r.r[2] > 0) {
 +		sh = r.r[2] + 1;
 +	}
-+	int h = 360;
++	int h = 540;
 +	int w = ((sw * h / sh) + 4) & ~7;
-+	if (w < 320 || w > 1280) {
-+		w = 480;
++	if (w < 480 || w > 1600) {
++		w = 720;
 +	}
 +
 +	void *hdle = GfParmReadFile(path, GFPARM_RMODE_STD | GFPARM_RMODE_CREAT);
@@ -305,7 +308,7 @@ index 6e5c828..b01a1cf 100644
  	for (int i = 0; configFiles[i] != NULL; i++) {
  		snprintf(from, sizeof(from), "%s%s", GetDataDir(), configFiles[i]);
  		snprintf(to, sizeof(to), "%s%s", GetLocalDir(), configFiles[i]);
-@@ -174,7 +253,7 @@ setupLocalDir(void)
+@@ -174,7 +254,7 @@ setupLocalDir(void)
  			continue;
  		}
  		if (stat(to, &st) == 0) {
@@ -314,7 +317,7 @@ index 6e5c828..b01a1cf 100644
  				continue;
  			}
  			snprintf(old, sizeof(old), "%s.old", to);
-@@ -191,6 +270,22 @@ setupLocalDir(void)
+@@ -191,6 +271,22 @@ setupLocalDir(void)
  			}
  		}
  		copyFile(from, to);

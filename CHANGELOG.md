@@ -1,5 +1,13 @@
 # Changelog
 
+## m2-3 (2026-10-05)
+
+- Pi test of m2-2: full screen fills the screen now, but the writing was
+  too pixelated at 360 pixels high. The draw size is now 540 high (960x540
+  on 16:9, 864x540 on 16:10, 720x540 on 4:3); Options > Display has 480-
+  and 720-high sizes too. It's slower than 360: pick a smaller size there
+  for speed.
+
 ## m2-2 (2026-10-05)
 
 - Pi test of m2-1: full screen showed the picture small in the middle of
