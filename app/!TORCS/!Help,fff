@@ -13,8 +13,13 @@ Requirements
   silent.
 - About 64 MB of free memory.
 
-Everything is drawn by software OpenGL (riscos-mesa), so keep the
-window small: the game opens a 640x480 window.
+Everything is drawn by software OpenGL (riscos-mesa) on the CPU, so the
+fewer pixels it draws, the faster it runs. The first time it runs, TORCS
+fills the screen with a picture drawn at a reduced size (360 pixels high,
+in the screen's shape: 640x360 on a 16:9 screen) and stretched over the
+screen, by the Pi's display hardware where the VideoOverlay module is
+loaded (!Run loads it if it's in !System). Other programs keep running
+underneath.
 
 Playing
 -------
@@ -38,8 +43,13 @@ works through USBJoystick (0.23 or later) or any Joystick module.
 
 Options
 -------
-- Options > Display: window size. TORCS saves the setting and quits;
-  start it again to use it.
+- Options > Display: the drawing size and Full-screen or Window mode.
+  In full screen the size is what's drawn and then stretched; pick one in
+  your screen's shape (4:3: 480x360; 16:10: 576x360; 16:9: 640x360).
+  TORCS saves the setting and quits; start it again to use it.
+- Options > Graphic Configuration: visibility, smoke, skid marks, wheels
+  and the sky background (the panorama around the track; off by default:
+  it costs a fifth of the drawing time).
 - The !Run file has settings: a log file (TORCS$Log, on in test builds:
   <Wimp$ScrapDir>.TORCSLog), and -M for multitexturing (slower).
 - Your settings and race results are in <Choices$Write>.TORCS. Delete

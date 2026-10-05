@@ -1,0 +1,322 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Mon, 5 Oct 2026 17:13:53 +0100
+Subject: [PATCH] RISC OS: speed: draw size, sky background option, RGBA fonts
+
+Pi result of m1-1: 4.8 fps in a 640x480 window. Most of a frame is
+filling pixels, so:
+- riscosplatform.cpp: on the first run, screen.xml is set to full screen
+  at a draw size in the screen's shape, 360 pixels high (576x360 on a
+  16:10 screen, 640x360 on 16:9). TORCS's full screen is GLUT's game
+  mode, which riscos-mesa's freeglut draws at the requested size and
+  stretches over the screen, through a hardware overlay where there is
+  one.
+- screen.cpp: Display sizes in 16:10 and 16:9 shapes too.
+- Graphic Configuration: "Sky background" (graph.xml "sky background",
+  default yes). The panorama is a whole screen of textured pixels drawn
+  before the scene every frame (18% of a host profile frame); without it
+  the sky is the track's background colour.
+- guifont.cpp: font textures RGBA in GL_CLAMP_TO_EDGE on software OpenGL
+  (luminance-alpha in GL_CLAMP took Mesa's general path).
+---
+ src/interfaces/graphic.h                  |  3 ++
+ src/libs/confscreens/graphconfig.cpp      | 47 ++++++++++++++++++++
+ src/libs/tgfclient/guifont.cpp            | 29 +++++++++++++
+ src/libs/tgfclient/screen.cpp             |  6 ++-
+ src/linux/riscosplatform.cpp              | 53 +++++++++++++++++++++++
+ src/modules/graphic/ssggraph/grmain.cpp   |  8 ++++
+ src/modules/graphic/ssggraph/grmain.h     |  1 +
+ src/modules/graphic/ssggraph/grscreen.cpp |  4 +-
+ 8 files changed, 149 insertions(+), 2 deletions(-)
+
+diff --git a/src/interfaces/graphic.h b/src/interfaces/graphic.h
+index 9ff01ff..08ec640 100644
+--- a/src/interfaces/graphic.h
++++ b/src/interfaces/graphic.h
+@@ -55,6 +55,9 @@
+ #define GR_ATT_TEXTURECOMPRESSION_DISABLED	"disabled"
+ 
+ #define GR_ATT_WHEELRENDERING				"wheel rendering"
++#define GR_ATT_BACKGROUND				"sky background"
++#define GR_ATT_BACKGROUND_YES				"yes"
++#define GR_ATT_BACKGROUND_NO				"no"
+ #define GR_ATT_WHEELRENDERING_DETAILED		"detailed"
+ #define GR_ATT_WHEELRENDERING_SIMPLE		"simple"
+ 
+diff --git a/src/libs/confscreens/graphconfig.cpp b/src/libs/confscreens/graphconfig.cpp
+index f44ce4a..6e6dd8a 100644
+--- a/src/libs/confscreens/graphconfig.cpp
++++ b/src/libs/confscreens/graphconfig.cpp
+@@ -52,6 +52,16 @@ static const int nbOptionsWheelDetail = sizeof(wheelDetailOptionList) / sizeof(w
+ static int curOptionWheelDetail = 0;
+ static int WheelDetailOptionId;
+ 
++// Sky background (the panorama around the track): drawing it is a whole
++// screen of textured pixels each frame, which matters with software OpenGL.
++static const char *backgroundOptionList[] = {
++	GR_ATT_BACKGROUND_YES,
++	GR_ATT_BACKGROUND_NO
++};
++static const int nbOptionsBackground = sizeof(backgroundOptionList) / sizeof(backgroundOptionList[0]);
++static int curOptionBackground = 0;
++static int BackgroundOptionId;
++
+ 
+ 
+ 
+@@ -76,6 +86,7 @@ static void SaveGraphicOptions(void *prevMenu)
+ 	GfParmSetNum(grHandle, GR_SCT_GRAPHIC, GR_ATT_MAXSTRIPBYWHEEL, NULL, SkidValue);
+ 	GfParmSetNum(grHandle, GR_SCT_GRAPHIC, GR_ATT_LODFACTOR, NULL, LodFactorValue);	
+ 	GfParmSetStr(grHandle, GR_SCT_GRAPHIC, GR_ATT_WHEELRENDERING, wheelDetailOptionList[curOptionWheelDetail]);	
++	GfParmSetStr(grHandle, GR_SCT_GRAPHIC, GR_ATT_BACKGROUND, backgroundOptionList[curOptionBackground]);
+ 	
+ 	GfParmWriteFile(NULL, grHandle, "graph");
+ 	GfParmReleaseHandle(grHandle);
+@@ -164,6 +175,15 @@ static void changeWheelDetailState(void *vp)
+ 
+ 
+ 
++static void changeBackgroundState(void *vp)
++{
++	curOptionBackground = (curOptionBackground + 1) % nbOptionsBackground;
++	GfuiLabelSetText(scrHandle, BackgroundOptionId, backgroundOptionList[curOptionBackground]);
++}
++
++
++
++
+ void *GraphMenuInit(void *prevMenu)
+ {
+ 	const int	x = 50;
+@@ -244,6 +264,33 @@ void *GraphMenuInit(void *prevMenu)
+ 				
+ 	WheelDetailOptionId = GfuiLabelCreate(scrHandle, wheelDetailOptionList[curOptionWheelDetail], GFUI_FONT_MEDIUM_C, center, y, GFUI_ALIGN_HC_VB, 32);
+ 	GfuiLabelSetColor(scrHandle, WheelDetailOptionId, LabelColor);
++
++	// Sky background option (two values: both arrows toggle it)
++	y -= dy;
++	GfuiLabelCreate(scrHandle, "Sky background:", GFUI_FONT_MEDIUM, x, y, GFUI_ALIGN_HL_VB, 0);
++
++	GfuiGrButtonCreate(scrHandle, "data/img/arrow-left.png", "data/img/arrow-left.png",
++		"data/img/arrow-left.png", "data/img/arrow-left-pushed.png",
++		x2, y-5, GFUI_ALIGN_HL_VB, 1,
++		(void*)-1, changeBackgroundState,
++		NULL, (tfuiCallback)NULL, (tfuiCallback)NULL);
++
++	GfuiGrButtonCreate(scrHandle, "data/img/arrow-right.png", "data/img/arrow-right.png",
++		"data/img/arrow-right.png", "data/img/arrow-right-pushed.png",
++		x2+width, y-5, GFUI_ALIGN_HR_VB, 1,
++		(void*)1, changeBackgroundState,
++		NULL, (tfuiCallback)NULL, (tfuiCallback)NULL);
++
++	optionName = GfParmGetStr(grHandle, GR_SCT_GRAPHIC, GR_ATT_BACKGROUND, backgroundOptionList[0]);
++	curOptionBackground = 0;
++	for (i = 0; i < nbOptionsBackground; i++) {
++		if (strcmp(optionName, backgroundOptionList[i]) == 0) {
++			curOptionBackground = i;
++			break;
++		}
++	}
++	BackgroundOptionId = GfuiLabelCreate(scrHandle, backgroundOptionList[curOptionBackground], GFUI_FONT_MEDIUM_C, center, y, GFUI_ALIGN_HC_VB, 32);
++	GfuiLabelSetColor(scrHandle, BackgroundOptionId, LabelColor);
+ 										
+ 	// Navigation
+ 	GfuiButtonCreate(scrHandle, "Accept", GFUI_FONT_LARGE, 210, 40, 150, GFUI_ALIGN_HC_VB, GFUI_MOUSE_UP,
+diff --git a/src/libs/tgfclient/guifont.cpp b/src/libs/tgfclient/guifont.cpp
+index b47364a..78fdf5f 100644
+--- a/src/libs/tgfclient/guifont.cpp
++++ b/src/libs/tgfclient/guifont.cpp
+@@ -170,16 +170,45 @@ GfuiFontClass::GfuiFontClass(char *FileName)
+ 	font->Tex = Tex;
+ 	//Set texture attributes
+ 	glBindTexture(GL_TEXTURE_2D, Tex);
++#if defined(__riscos__) || defined(TORCS_SOFTWARE_GL)
++	// Software OpenGL: an RGBA texture in GL_CLAMP_TO_EDGE keeps the text
++	// (menus, the race display) on Mesa's fast textured-triangle path;
++	// luminance-alpha in GL_CLAMP took the general path.
++	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++#else
+ 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+ 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
++#endif
+ 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+ 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+ 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+ 
+ 	//Create texture
++#if defined(__riscos__) || defined(TORCS_SOFTWARE_GL)
++	{
++		int n = font->TexWidth * font->TexHeight;
++		unsigned char *rgba = (unsigned char *)malloc(n * 4);
++		if (rgba != NULL) {
++			for (int i = 0; i < n; i++) {
++				rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = TexBytes[i * 2];
++				rgba[i * 4 + 3] = TexBytes[i * 2 + 1];
++			}
++			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, font->TexWidth,
++				 font->TexHeight, 0, GL_RGBA,
++				 GL_UNSIGNED_BYTE, (void *)rgba);
++			free(rgba);
++		} else {
++			glTexImage2D(GL_TEXTURE_2D, 0, 2, font->TexWidth,
++				 font->TexHeight, 0, GL_LUMINANCE_ALPHA,
++				 GL_UNSIGNED_BYTE, (void *)TexBytes);
++		}
++	}
++#else
+ 	glTexImage2D(GL_TEXTURE_2D, 0, 2, font->TexWidth,
+ 		 font->TexHeight, 0, GL_LUMINANCE_ALPHA,
+ 		 GL_UNSIGNED_BYTE, (void *)TexBytes);
++#endif
+ 
+ 	//Clean up
+ 	free(TexBytes);
+diff --git a/src/libs/tgfclient/screen.cpp b/src/libs/tgfclient/screen.cpp
+index 53d966c..ea8cf7e 100644
+--- a/src/libs/tgfclient/screen.cpp
++++ b/src/libs/tgfclient/screen.cpp
+@@ -78,7 +78,11 @@ static int nbRes = 0;
+ #elif defined(__riscos__)
+ // RISC OS: everything is drawn by software OpenGL, and drawing time grows
+ // with the number of pixels, so the list starts small.
+-static char	*Res[] = {"320x240", "400x300", "480x360", "512x384", "640x480", "800x600", "1024x768", "1280x720", "1280x1024", "1600x900", "1920x1080"};
++// In full screen this is the size drawn (and stretched over the screen):
++// sizes in the screen's shape (4:3, 16:10, 16:9) keep the picture in shape.
++static char	*Res[] = {"320x240", "400x300", "480x360", "512x384", "640x480", "800x600", "1024x768",
++	"384x240", "576x360", "640x400", "768x480", "1024x640",
++	"432x240", "640x360", "768x432", "856x480", "1280x720", "1280x1024", "1600x900", "1920x1080"};
+ static const int nbRes = sizeof(Res) / sizeof(Res[0]);
+ #else // USE_RANDR_EXT
+ static char	*Res[] = {"640x480", "800x600", "1024x768", "1152x768", "1152x864", "1200x854", "1200x960", "1280x720", "1280x1024", "1400x900", "1600x900", "1600x1200", "1680x1050", "1920x1200", "320x200"};
+diff --git a/src/linux/riscosplatform.cpp b/src/linux/riscosplatform.cpp
+index 6e5c828..20e4dcb 100644
+--- a/src/linux/riscosplatform.cpp
++++ b/src/linux/riscosplatform.cpp
+@@ -161,6 +161,54 @@ static const char *const configFiles[] = {
+ 	NULL
+ };
+ 
++#ifdef __riscos__
++/* The first run's screen settings (screen.xml was just copied): full
++   screen, drawn at a reduced size and stretched over the screen.
++   riscos-mesa's freeglut does this for GLUT's game mode, which TORCS uses
++   for full screen: the picture is drawn at the size TORCS asks for (the
++   screen.xml x and y) and stretched by a hardware overlay (VideoOverlay on
++   a Pi) or by the plot. Drawing time grows with the number of pixels, so
++   this is the biggest speed setting there is. The size has the screen's
++   shape (so the picture isn't stretched out of shape) and is 360 pixels
++   high. Options > Display changes it; "Window mode" there gives a window
++   of that size instead. */
++static void
++riscosScreenDefaults(const char *path)
++{
++	_kernel_swi_regs r;
++	int sw = 1920, sh = 1080;
++
++	r.r[0] = -1;
++	r.r[1] = 11;	/* XWindLimit: width - 1 */
++	if (_kernel_swi(0x35 /* OS_ReadModeVariable */, &r, &r) == NULL && r.r[2] > 0) {
++		sw = r.r[2] + 1;
++	}
++	r.r[0] = -1;
++	r.r[1] = 12;	/* YWindLimit: height - 1 */
++	if (_kernel_swi(0x35, &r, &r) == NULL && r.r[2] > 0) {
++		sh = r.r[2] + 1;
++	}
++	int h = 360;
++	int w = ((sw * h / sh) + 4) & ~7;
++	if (w < 320 || w > 1280) {
++		w = 480;
++	}
++
++	void *hdle = GfParmReadFile(path, GFPARM_RMODE_STD | GFPARM_RMODE_CREAT);
++	if (hdle == NULL) {
++		return;
++	}
++	GfParmSetNum(hdle, "Screen Properties", "x", NULL, w);
++	GfParmSetNum(hdle, "Screen Properties", "y", NULL, h);
++	GfParmSetNum(hdle, "Screen Properties", "window width", NULL, w);
++	GfParmSetNum(hdle, "Screen Properties", "window height", NULL, h);
++	GfParmSetStr(hdle, "Screen Properties", "fullscreen", "yes");
++	GfParmWriteFile(NULL, hdle, "Screen");
++	GfParmReleaseHandle(hdle);
++	printf("RISC OS setup: screen %dx%d, drawing at %dx%d, full screen\n", sw, sh, w, h);
++}
++#endif
++
+ static void
+ setupLocalDir(void)
+ {
+@@ -191,6 +239,11 @@ setupLocalDir(void)
+ 			}
+ 		}
+ 		copyFile(from, to);
++#ifdef __riscos__
++		if (strcmp(configFiles[i], "config/screen.xml") == 0) {
++			riscosScreenDefaults(to);
++		}
++#endif
+ 	}
+ }
+ 
+diff --git a/src/modules/graphic/ssggraph/grmain.cpp b/src/modules/graphic/ssggraph/grmain.cpp
+index cdaa49c..d8b4035 100644
+--- a/src/modules/graphic/ssggraph/grmain.cpp
++++ b/src/modules/graphic/ssggraph/grmain.cpp
+@@ -69,6 +69,7 @@ class cGrScreen *grScreens[GR_NB_MAX_SCREEN] = {NULL, NULL, NULL, NULL};
+ int grNbScreen = 1;
+ tdble grLodFactorValue = 1.0;
+ EWheelDetail grUseDetailedWheels = DETAILED;
++int grDrawSkyBackground = 1;	// the panorama around the track (else the sky colour)
+ 
+ #ifdef WIN32
+ #include <GL/glext.h>
+@@ -299,6 +300,8 @@ initView(int x, int y, int width, int height, int /* flag */, void *screen)
+ 		grUseDetailedWheels = SIMPLE;	
+ 	}
+ 
++	grDrawSkyBackground = strcmp(GfParmGetStr(grHandle, GR_SCT_GRAPHIC, GR_ATT_BACKGROUND, GR_ATT_BACKGROUND_YES), GR_ATT_BACKGROUND_NO) != 0;
++
+ 	GfParmReleaseHandle(grHandle);
+ 
+ 	return 0;
+@@ -330,6 +333,11 @@ refresh(tSituation *s)
+ 
+     START_PROFILE("grDrawBackground/glClear");
+     glDepthFunc(GL_LEQUAL);
++    if (!grDrawSkyBackground && grTrack) {
++	// No panorama: the sky is the clear colour, the track's background
++	// colour (other code, the track map, changes the clear colour).
++	glClearColor(grTrack->graphic.bgColor[0], grTrack->graphic.bgColor[1], grTrack->graphic.bgColor[2], 1.0);
++    }
+     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+     STOP_PROFILE("grDrawBackground/glClear");
+ 
+diff --git a/src/modules/graphic/ssggraph/grmain.h b/src/modules/graphic/ssggraph/grmain.h
+index 0ddc3fe..dd0d330 100644
+--- a/src/modules/graphic/ssggraph/grmain.h
++++ b/src/modules/graphic/ssggraph/grmain.h
+@@ -76,6 +76,7 @@ extern double grDeltaTime;
+ 
+ enum EWheelDetail { DETAILED, SIMPLE };
+ extern EWheelDetail grUseDetailedWheels;
++extern int grDrawSkyBackground;
+ 
+ inline float urandom() {
+ 	return (((float)rand()/(1.0+(float)RAND_MAX)));
+diff --git a/src/modules/graphic/ssggraph/grscreen.cpp b/src/modules/graphic/ssggraph/grscreen.cpp
+index 5366fdb..d6d459e 100644
+--- a/src/modules/graphic/ssggraph/grscreen.cpp
++++ b/src/modules/graphic/ssggraph/grscreen.cpp
+@@ -265,7 +265,9 @@ void cGrScreen::camDraw(tSituation *s)
+ 	dispCam->update(curCar, s);
+ 	STOP_PROFILE("dispCam->update*");
+ 	
+-	if (dispCam->getDrawBackground()) {
++	// Without the panorama, the sky is the clear colour (the track's
++	// background colour, set in grLoadBackground).
++	if (dispCam->getDrawBackground() && grDrawSkyBackground) {
+ 		glDisable(GL_LIGHTING);
+ 		glDisable(GL_DEPTH_TEST);
+ 		grDrawBackground(dispCam, bgCam);

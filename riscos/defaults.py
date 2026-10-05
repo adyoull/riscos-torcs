@@ -42,7 +42,9 @@ def quickrace(s):
 edit('config/raceman/quickrace.xml', quickrace)
 
 # Graphics: fewer smoke particles and skid marks, shorter view distance,
-# simple wheels.
+# simple wheels, no sky panorama (a whole screen of textured pixels each
+# frame: -22% on the host profile; the sky is then the track's background
+# colour). All in Options > Graphic Configuration.
 GRAPH = [
     ('Graphic', 'smoke value', '100'),
     ('Graphic', 'skid value', '50'),
@@ -55,6 +57,10 @@ def graph(s):
     # Textures at most 512x512 (Options > OpenGL): software OpenGL keeps
     # every texture in RAM and many track textures are 1024x1024; smaller
     # ones also draw faster (fewer cache misses). 
+    s = s.replace('<attstr name="wheel rendering" val="simple"/>',
+                  '<attstr name="wheel rendering" val="simple"/>\n'
+                  '    <attstr name="sky background" val="no"/>', 1)
+    assert 'sky background' in s
     assert 'OpenGL Features' not in s
     s = s.replace('</params>', '  <section name="OpenGL Features">\n'
                   '    <attnum name="user texture sizelimit" val="512"/>\n'

@@ -30,7 +30,7 @@ if [ ! -d "$TORCS_SRC" ]; then
   cd "$TORCS_SRC"
   git init -q
   # The game data (737 MB) isn't part of the patched tree.
-  printf 'data/\n*.o\n*.a\n*.so\n.depend\nexport/\nsrc/libs/txml/gennmtab/gennmtab\nsrc/linux/riscos_modtab.cpp\nsrc/linux/torcs\nsrc/linux/torcs.map\n' > .git/info/exclude
+  printf 'data/\n*.o\n*.a\n*.so\n.depend\nexport/\nsrc/libs/txml/gennmtab/gennmtab\nsrc/linux/riscos_modtab.cpp\nsrc/linux/torcs\nsrc/linux/torcs.map\nsetup_linux.sh\n' > .git/info/exclude
   git add -A
   git -c user.name=upstream -c user.email=upstream@invalid commit -qm "TORCS 1.3.7+dfsg (Debian)"
   git tag upstream

@@ -40,13 +40,21 @@ s = open(p).read()
 m = re.search(r'<section name="%s">.*?</section>' % re.escape(sec), s, re.S)
 body = m.group(0)
 nb, n = re.subn(r'(<att(?:num|str) name="%s" val=")[^"]*"' % re.escape(att), lambda x: x.group(1) + val + '"', body)
-if n == 0: sys.exit("no %s in %s" % (att, sec))
+if n == 0:  # not there yet: add it as a string attribute
+    nb = body.replace('</section>', '  <attstr name="%s" val="%s"/>\n  </section>' % (att, val), 1)
+    if nb.count('<section') > 1: sys.exit("can't add %s to %s" % (att, sec))
 open(p, 'w').write(s.replace(body, nb))
 PY
 done
 # PROF_TEXSIZE: the "user texture sizelimit" (Options > OpenGL)
 if [ -n "${PROF_TEXSIZE:-}" ]; then
   sed -i "s|</params>|  <section name=\"OpenGL Features\">\n    <attnum name=\"user texture sizelimit\" val=\"$PROF_TEXSIZE\"/>\n  </section>\n</params>|" "$L/config/graph.xml"
+fi
+# PROF_SIZE=WxH: the window (and view) size, in screen.xml
+if [ -n "${PROF_SIZE:-}" ]; then
+  w=${PROF_SIZE%x*}; h=${PROF_SIZE#*x}
+  sed -i -e "s|<attnum name=\"x\" val=\"[0-9]*\"/>|<attnum name=\"x\" val=\"$w\"/>|" \
+         -e "s|<attnum name=\"y\" val=\"[0-9]*\"/>|<attnum name=\"y\" val=\"$h\"/>|" "$L/config/screen.xml"
 fi
 DISP=:${PROF_DISPLAY:-7}
 pgrep -f "Xvfb $DISP" >/dev/null || (Xvfb $DISP -screen 0 1024x768x24 >/dev/null 2>&1 &); sleep 2
@@ -55,7 +63,9 @@ ARGS="-l $L -L $D -D $D"; [ -n "${PROF_MULTITEX:-}" ] && ARGS="$ARGS -M"
 CG="$OUT/$NAME.cg"; rm -f "$CG"
 (cd "$D" && valgrind --tool=callgrind --instr-atstart=no --callgrind-out-file="$CG" \
    "$TORCS_BIN" $ARGS > "$OUT/$NAME.log" 2>&1 &)
-click() { xdotool mousemove 320 90 click 1; }
+# The menus are laid out for 640x480 and scaled to the window.
+CW=640; CH=480; [ -n "${PROF_SIZE:-}" ] && { CW=${PROF_SIZE%x*}; CH=${PROF_SIZE#*x}; }
+click() { xdotool mousemove $((CW / 2)) $((90 * CH / 480)) click 1; }
 sleep 40; click; sleep 15; click; sleep 15; click
 sleep "$PROF_WAIT"
 import -window root "$OUT/$NAME-start.png"

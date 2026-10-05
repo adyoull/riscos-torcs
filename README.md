@@ -7,8 +7,8 @@ free-software TORCS 1.3.7 source (`torcs_1.3.7+dfsg`), plus the scripts that
 cross-build it and the RISC OS application files. It doesn't contain TORCS
 itself: `build/fetch.sh` downloads the sources and checks them.
 
-Status: **test builds** (M1). The program builds and links; it hasn't been run
-on a Pi yet.
+Status: **test builds**. m1-1 runs on a Pi 4 (4.8 fps in a 640x480
+window); m2-1 draws full screen at a reduced size for speed.
 
 ## How it fits together
 

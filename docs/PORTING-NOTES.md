@@ -25,6 +25,7 @@ case riscos-mesa's software renderer handles best.
 | 0006 modules linked in | `riscosspec.cpp`: the module functions over a table (`RiscosModules[]`, written by `build-torcs.sh`); `CLOCK_MONOTONIC` clock; ssggraph's `grContext` state is set again once there is an OpenGL context |
 | 0007 desktop start-up | `riscosplatform.cpp` (log file, crash report, `<TORCS$Dir>` / `<Choices$Write>.TORCS`, first-run copy of the settings, run in the data directory); multitexturing off unless `-M`; no X11 game mode; no `execlp` (screen settings: save and quit); no `sh` for telemetry; small window sizes in the Display menu |
 | 0008 fast textured triangles | `GL_FASTEST`, `GL_CLAMP` → `GL_CLAMP_TO_EDGE`, luminance textures expanded to RGB(A), `GL_SINGLE_COLOR` lighting |
+| 0009 speed | first run: full screen drawn at a size in the screen's shape, 360 high (freeglut game mode: render size + overlay); 16:10 and 16:9 Display sizes; "Sky background" option in Graphic Configuration (RISC OS default off); RGBA font textures |
 
 The plib patch (`patches/plib/10-riscos-platform.patch`) adds `UL_RISCOS`: no
 `dlopen`, the ssg context check through EGL, a joystick back end on the
@@ -90,14 +91,23 @@ an xlib libGL. YSFlight measured about 175M instructions per frame for about
 | + RISC OS graph defaults, textures ≤ 512 | 428 | the shipped defaults |
 | same, alone on the track, textures ≤ 256 | 424 | the robots are far ahead by then; 256 saves little more |
 
-What remains is pixel filling (89% of the frame is drawing; the physics and
-the robots are small), so the next saving is drawing fewer pixels:
+**Pi 4, m1-1: 4.8 fps** (640x480 window, alone on forza). That is slower
+than the YSFlight scale suggested (textures cost more in cache misses than
+instruction counts show), so m2-1 cuts pixels:
 
-- **render size**: riscos-mesa's EGL can draw at a fixed size and stretch it
-  to the window (`EGL_RENDER_WIDTH_RISCOS`), or a hardware overlay can do the
-  stretching. TORCS gets its window from freeglut, so this needs the surface
-  attribute set after the window opens and the mouse scaled (next milestone);
-- meanwhile the Display menu offers 320x240 to 512x384 windows.
+| Build (m2-1 settings) | M instr/frame | Notes |
+|---|---|---|
+| RGBA fonts, 640x480 | 432 | no change (text is a small area) |
+| + no sky background | 336 | the panorama was 18–22% of a frame |
+| + drawn at 640x360 (full screen, stretched) | 276 | 64% of m1-1's 428 |
+
+TORCS's full screen is GLUT's game mode, and riscos-mesa's freeglut draws a
+game-mode window at the size asked for and stretches it over the screen
+(through VideoOverlay where it's loaded, which also saves the plot), with the
+pointer scaled to match. So TORCS needed no window code: the first run sets
+full screen at a size in the screen's shape. What remains is Mesa's
+`fast_persp_span` (34% self) plus fog (6%) and depth (3%): Mesa-side work
+(a riscos-mesa handoff, e.g. NEON) or fewer pixels still (480x270).
 
 The texture size limit also saves memory: software OpenGL keeps every texture
 in RAM, and many track textures are 1024x1024.

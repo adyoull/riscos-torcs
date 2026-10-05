@@ -6,3 +6,4 @@
 0006-RISC-OS-modules-linked-in-found-through-a-table.patch
 0007-RISC-OS-desktop-start-up-no-exec-or-shell-single-tex.patch
 0008-RISC-OS-textures-on-Mesa-s-fast-textured-triangle-pa.patch
+0009-RISC-OS-speed-draw-size-sky-background-option-RGBA-f.patch
