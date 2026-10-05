@@ -8,7 +8,8 @@ cross-build it and the RISC OS application files. It doesn't contain TORCS
 itself: `build/fetch.sh` downloads the sources and checks them.
 
 Status: **test builds**. m1-1 runs on a Pi 4 (4.8 fps in a 640x480
-window); m2-1 draws full screen at a reduced size for speed.
+window); m2-4 draws the 3D scene at half size under full-size writing
+(7.8 fps full screen on a Pi 4); m2-5 opens in a 960x540 desktop window.
 
 ## How it fits together
 

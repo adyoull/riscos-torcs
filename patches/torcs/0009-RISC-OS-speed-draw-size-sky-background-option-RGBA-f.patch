@@ -5,13 +5,16 @@ Subject: [PATCH] RISC OS: speed: draw size, sky background option, RGBA fonts
 
 Pi result of m1-1: 4.8 fps in a 640x480 window. Most of a frame is
 filling pixels, so:
-- riscosplatform.cpp: on the first run, screen.xml is set to full screen
-  at a draw size in the screen's shape, 540 pixels high (864x540 on a
-  16:10 screen, 960x540 on 16:9; 360 high, tried first, made the text
-  too pixelated: TORCS lays text out for 640x480). TORCS's full screen is GLUT's game
-  mode, which riscos-mesa's freeglut draws at the requested size and
-  stretches over the screen, through a hardware overlay where there is
-  one.
+- riscosplatform.cpp: on the first run, screen.xml is set to a desktop
+  window in the screen's shape, 540 pixels high (864x540 on a 16:10
+  screen, 960x540 on 16:9; 360 high, tried first, made the text too
+  pixelated: TORCS lays text out for 640x480; 360 high if 540 doesn't
+  fit). Full screen (a choice in Options > Display; the default
+  up to m2-4) is GLUT's game mode, which riscos-mesa's freeglut draws at
+  the requested size and stretches over the screen, through a hardware
+  overlay where there is one.
+- screen.cpp: on RISC OS the window opens near the centre of the screen
+  (at 0,0 its title bar would be off the top).
 - screen.cpp: Display sizes in 16:10 and 16:9 shapes too (up to 540 and
   720 high).
 - Graphic Configuration: "Sky background" (graph.xml "sky background",
@@ -31,12 +34,12 @@ filling pixels, so:
  src/interfaces/graphic.h                  |   3 +
  src/libs/confscreens/graphconfig.cpp      |  47 ++++++++++
  src/libs/tgfclient/guifont.cpp            |  29 ++++++
- src/libs/tgfclient/screen.cpp             |   6 +-
- src/linux/riscosplatform.cpp              | 104 +++++++++++++++++++++-
+ src/libs/tgfclient/screen.cpp             |  10 +-
+ src/linux/riscosplatform.cpp              | 108 +++++++++++++++++++++-
  src/modules/graphic/ssggraph/grmain.cpp   |   8 ++
  src/modules/graphic/ssggraph/grmain.h     |   1 +
  src/modules/graphic/ssggraph/grscreen.cpp |   4 +-
- 8 files changed, 196 insertions(+), 6 deletions(-)
+ 8 files changed, 204 insertions(+), 6 deletions(-)
 
 diff --git a/src/interfaces/graphic.h b/src/interfaces/graphic.h
 index 9ff01ff..08ec640 100644
@@ -182,7 +185,7 @@ index b47364a..78fdf5f 100644
  	//Clean up
  	free(TexBytes);
 diff --git a/src/libs/tgfclient/screen.cpp b/src/libs/tgfclient/screen.cpp
-index 53d966c..9d7e746 100644
+index 53d966c..c1ff2e3 100644
 --- a/src/libs/tgfclient/screen.cpp
 +++ b/src/libs/tgfclient/screen.cpp
 @@ -78,7 +78,11 @@ static int nbRes = 0;
@@ -198,8 +201,20 @@ index 53d966c..9d7e746 100644
  static const int nbRes = sizeof(Res) / sizeof(Res[0]);
  #else // USE_RANDR_EXT
  static char	*Res[] = {"640x480", "800x600", "1024x768", "1152x768", "1152x864", "1200x854", "1200x960", "1280x720", "1280x1024", "1400x900", "1600x900", "1600x1200", "1680x1050", "1920x1200", "320x200"};
+@@ -398,7 +402,11 @@ void GfScrInit(int argc, char *argv[])
+ 
+ 	if (!fullscreen) {
+ 	/* Give an initial size and position so user doesn't have to place window */
++#ifndef __riscos__
+ 		glutInitWindowPosition(0, 0);
++#endif
++		/* RISC OS: no position, so freeglut opens the window near the
++		   centre of the screen (at 0,0 the title bar would be off the top). */
+ 		glutInitWindowSize(winX, winY);
+ 		Window = glutCreateWindow(argv[0]);
+ 		if (!Window) {
 diff --git a/src/linux/riscosplatform.cpp b/src/linux/riscosplatform.cpp
-index 6e5c828..2966f62 100644
+index 6e5c828..639b0a9 100644
 --- a/src/linux/riscosplatform.cpp
 +++ b/src/linux/riscosplatform.cpp
 @@ -140,9 +140,7 @@ copyFile(const char *from, const char *to)
@@ -213,23 +228,22 @@ index 6e5c828..2966f62 100644
  static const char *const configFiles[] = {
  	"config/raceengine.xml",
  	"config/style.xsl",
-@@ -161,12 +159,94 @@ static const char *const configFiles[] = {
+@@ -161,12 +159,98 @@ static const char *const configFiles[] = {
  	NULL
  };
  
 +#ifdef __riscos__
 +/* The first run's screen settings (screen.xml was just copied, on the
-+   first run or the first run of a new version): full
-+   screen, drawn at a reduced size and stretched over the screen.
-+   riscos-mesa's freeglut does this for GLUT's game mode, which TORCS uses
-+   for full screen: the picture is drawn at the size TORCS asks for (the
-+   screen.xml x and y) and stretched by a hardware overlay (VideoOverlay on
-+   a Pi) or by the plot. Drawing time grows with the number of pixels, so
-+   this is the biggest speed setting there is. The size has the screen's
-+   shape (so the picture isn't stretched out of shape) and is 540 pixels
-+   high: TORCS lays its text out for 640x480, and drawn much smaller than
-+   that, letters lose rows and columns (360 high was too pixelated). Options > Display changes it; "Window mode" there gives a window
-+   of that size instead. */
++   first run or the first run of a new version): a desktop window, 540
++   pixels high in the screen's shape (960x540 on a 16:9 screen), so TORCS
++   runs alongside other programs. Drawing time grows with the number of
++   pixels; TORCS lays its text out for 640x480, and drawn much smaller than
++   that, letters lose rows and columns (360 high was too pixelated), so 540
++   is the default. The 3D scene is drawn at a lower resolution still (the
++   "scene scale" in graph.xml). Options > Display changes the size, or
++   picks full screen: GLUT's game mode, which riscos-mesa's freeglut draws
++   at the size asked for and stretches over the screen with a hardware
++   overlay (VideoOverlay on a Pi) or the plot. */
 +static void
 +riscosScreenDefaults(const char *path)
 +{
@@ -251,6 +265,11 @@ index 6e5c828..2966f62 100644
 +	if (w < 480 || w > 1600) {
 +		w = 720;
 +	}
++	/* The window, with its title bar, must fit on the screen. */
++	if (sh < h + 64 || sw < w + 16) {
++		h = 360;
++		w = ((sw * h / sh) + 4) & ~7;
++	}
 +
 +	void *hdle = GfParmReadFile(path, GFPARM_RMODE_STD | GFPARM_RMODE_CREAT);
 +	if (hdle == NULL) {
@@ -260,10 +279,10 @@ index 6e5c828..2966f62 100644
 +	GfParmSetNum(hdle, "Screen Properties", "y", NULL, h);
 +	GfParmSetNum(hdle, "Screen Properties", "window width", NULL, w);
 +	GfParmSetNum(hdle, "Screen Properties", "window height", NULL, h);
-+	GfParmSetStr(hdle, "Screen Properties", "fullscreen", "yes");
++	GfParmSetStr(hdle, "Screen Properties", "fullscreen", "no");
 +	GfParmWriteFile(NULL, hdle, "Screen");
 +	GfParmReleaseHandle(hdle);
-+	printf("RISC OS setup: screen %dx%d, drawing at %dx%d, full screen\n", sw, sh, w, h);
++	printf("RISC OS setup: screen %dx%d, window %dx%d\n", sw, sh, w, h);
 +}
 +#endif
 +
@@ -308,7 +327,7 @@ index 6e5c828..2966f62 100644
  	for (int i = 0; configFiles[i] != NULL; i++) {
  		snprintf(from, sizeof(from), "%s%s", GetDataDir(), configFiles[i]);
  		snprintf(to, sizeof(to), "%s%s", GetLocalDir(), configFiles[i]);
-@@ -174,7 +254,7 @@ setupLocalDir(void)
+@@ -174,7 +258,7 @@ setupLocalDir(void)
  			continue;
  		}
  		if (stat(to, &st) == 0) {
@@ -317,7 +336,7 @@ index 6e5c828..2966f62 100644
  				continue;
  			}
  			snprintf(old, sizeof(old), "%s.old", to);
-@@ -191,6 +271,22 @@ setupLocalDir(void)
+@@ -191,6 +275,22 @@ setupLocalDir(void)
  			}
  		}
  		copyFile(from, to);

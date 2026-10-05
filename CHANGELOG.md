@@ -1,5 +1,15 @@
 # Changelog
 
+## m2-5 (2026-10-05)
+
+- Pi test of m2-4: 7.8 fps full screen (5 in m2-3).
+- TORCS now opens in a desktop window by default instead of full screen:
+  540 pixels high in the screen's shape (960x540 on a 16:9 screen), near
+  the centre of the screen. Full screen is still in Options > Display.
+  Settings are reset to the new defaults once, on the first start.
+- Linked with the released riscos-mesa devkit 20.3.5-12 (was the 12h test
+  devkit): the same game mode, plus faster fog.
+
 ## m2-4 (2026-10-05)
 
 - Pi test of m2-3: sharp writing at 960x540, but 5 fps. The 3D scene is now

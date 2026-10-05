@@ -14,12 +14,12 @@ Requirements
 - About 64 MB of free memory.
 
 Everything is drawn by software OpenGL (riscos-mesa) on the CPU, so the
-fewer pixels it draws, the faster it runs. The first time it runs, TORCS
-fills the screen with a picture drawn at a reduced size (540 pixels high,
-in the screen's shape: 960x540 on a 16:9 screen) and stretched over the
-screen, by the Pi's display hardware where the VideoOverlay module is
-loaded (!Run loads it if it's in !System). Other programs keep running
-underneath.
+fewer pixels it draws, the faster it runs. TORCS opens in a desktop
+window 540 pixels high, in the screen's shape (960x540 on a 16:9
+screen). It can also run full screen (see Options): the picture is then
+drawn at the same reduced size and stretched over the screen, by the
+Pi's display hardware where the VideoOverlay module is loaded (!Run
+loads it if it's in !System). Other programs keep running underneath.
 
 Playing
 -------
@@ -44,8 +44,8 @@ works through USBJoystick (0.23 or later) or any Joystick module.
 Options
 -------
 - Options > Display: the drawing size and Full-screen or Window mode.
-  In full screen the size is what's drawn and then stretched; pick one in
-  your screen's shape. Smaller is faster, bigger is sharper; below 480
+  In a window it's the window's size; in full screen it's what's drawn
+  and then stretched over the screen. Pick one in your screen's shape. Smaller is faster, bigger is sharper; below 480
   high the writing gets blocky.
     4:3    480x360  640x480  720x540
     16:10  576x360  768x480  864x540  1152x720
