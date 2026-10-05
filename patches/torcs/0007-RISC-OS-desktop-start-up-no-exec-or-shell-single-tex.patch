@@ -1,0 +1,419 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Mon, 5 Oct 2026 09:26:16 +0100
+Subject: [PATCH] RISC OS: desktop start-up, no exec or shell, single texture
+
+riscosplatform.cpp: stdout and stderr to the file named by TORCS$Log
+(else /dev/null; printing from a Wimp task opens a command window),
+opened once and shared with dup2; a crash report (RISC OS error and
+UnixLib's backtrace). The directories the Linux launcher passes default
+to <Choices$Write>/TORCS and <TORCS$Dir>; the settings files are copied
+on the first run (as setup_linux.sh does) and the game runs in its data
+directory.
+main.cpp: multitexturing off unless -M (one texture unit keeps Mesa's
+software renderer on its fast textured-triangle path).
+fg_gm.cpp: no X11 game mode. screen.cpp: changing the screen settings
+saves them and quits with a message (no execlp), and the Display menu
+offers window sizes from 320x240. telemetry: no sh.
+TORCS_STATIC_MODULES builds the same start-up on Linux, to test the
+static modules on a host.
+---
+ src/libs/tgfclient/fg_gm.cpp        |   8 +-
+ src/libs/tgfclient/screen.cpp       |  24 +++
+ src/linux/main.cpp                  |  25 ++++
+ src/linux/riscosplatform.cpp        | 222 ++++++++++++++++++++++++++++
+ src/modules/telemetry/telemetry.cpp |   4 +
+ 5 files changed, 279 insertions(+), 4 deletions(-)
+ create mode 100644 src/linux/riscosplatform.cpp
+
+diff --git a/src/libs/tgfclient/fg_gm.cpp b/src/libs/tgfclient/fg_gm.cpp
+index 36e2186..80df24f 100644
+--- a/src/libs/tgfclient/fg_gm.cpp
++++ b/src/libs/tgfclient/fg_gm.cpp
+@@ -51,7 +51,7 @@
+ #include <tgfclient.h>
+ #include "fg_gm.h"
+ 
+-#ifndef WIN32
++#if !defined(WIN32) && !defined(__riscos__)
+ 
+ #include <GL/glx.h>
+ #include <X11/Xlib.h>
+@@ -468,7 +468,7 @@ static int fghChangeDisplayMode( int /* haveToTest */ )
+  */
+ void fglutGameModeString( const char* string )
+ {
+-#ifndef WIN32
++#if !defined(WIN32) && !defined(__riscos__)
+     int width = 640, height = 480, depth = 16, refresh = 72;
+ 
+     /*
+@@ -501,7 +501,7 @@ void fglutGameModeString( const char* string )
+  */
+ int fglutEnterGameMode( void )
+ {
+-#ifndef WIN32
++#if !defined(WIN32) && !defined(__riscos__)
+     /*
+      * Remember the current resolution, etc.
+      */
+@@ -529,7 +529,7 @@ int fglutEnterGameMode( void )
+  */
+ void fglutLeaveGameMode( void )
+ {
+-#ifndef WIN32
++#if !defined(WIN32) && !defined(__riscos__)
+     /*
+      * Then, have the desktop visual settings restored
+      */
+diff --git a/src/libs/tgfclient/screen.cpp b/src/libs/tgfclient/screen.cpp
+index 050329b..63224a6 100644
+--- a/src/libs/tgfclient/screen.cpp
++++ b/src/libs/tgfclient/screen.cpp
+@@ -33,6 +33,9 @@
+ #else
+ #include <process.h>
+ #endif /* WIN32 */
++#ifdef __riscos__
++#include <kernel.h>
++#endif
+ 
+ #include <tgfclient.h>
+ #include <portability.h>
+@@ -72,6 +75,11 @@ static int usedFG = 0;
+ #ifdef USE_RANDR_EXT
+ static char	**Res = NULL;
+ static int nbRes = 0;
++#elif defined(__riscos__)
++// RISC OS: everything is drawn by software OpenGL, and drawing time grows
++// with the number of pixels, so the list starts small.
++static char	*Res[] = {"320x240", "400x300", "480x360", "512x384", "640x480", "800x600", "1024x768", "1280x720", "1280x1024", "1600x900", "1920x1080"};
++static const int nbRes = sizeof(Res) / sizeof(Res[0]);
+ #else // USE_RANDR_EXT
+ static char	*Res[] = {"640x480", "800x600", "1024x768", "1152x768", "1152x864", "1200x854", "1200x960", "1280x720", "1280x1024", "1400x900", "1600x900", "1600x1200", "1680x1050", "1920x1200", "320x200"};
+ static const int nbRes = sizeof(Res) / sizeof(Res[0]);
+@@ -519,6 +527,22 @@ GfScrReinit(void * /* dummy */)
+ 	}
+ 
+ 	retcode = execlp(cmd, cmdarg, (const char *)NULL);
++#elif defined(__riscos__)
++	/* RISC OS: a program can't replace itself (no exec), so the new screen
++	   settings, now saved, take effect when TORCS is started again. */
++	{
++		GfScrShutdown();
++		_kernel_oserror err;
++		_kernel_swi_regs r;
++		err.errnum = 0;
++		snprintf(err.errmess, sizeof(err.errmess),
++			"The new screen settings are saved. TORCS will now quit: start it again to use them.");
++		r.r[0] = (int)&err;
++		r.r[1] = 1 | 16;	/* OK box, no "Error from" prefix */
++		r.r[2] = (int)"TORCS";
++		_kernel_swi(0x400DF /* Wimp_ReportError */, &r, &r);
++		exit(0);
++	}
+ #else
+ 	GfScrShutdown();
+ 	
+diff --git a/src/linux/main.cpp b/src/linux/main.cpp
+index 982a480..e516b62 100644
+--- a/src/linux/main.cpp
++++ b/src/linux/main.cpp
+@@ -24,11 +24,21 @@
+ #include <tgfclient.h>
+ #include <client.h>
+ 
++#if defined(__riscos__) || defined(TORCS_STATIC_MODULES)
++#include "riscosspec.h"
++#else
+ #include "linuxspec.h"
++#endif
+ #include <raceinit.h>
+ 
+ extern bool bKeepModules;
+ 
++#if defined(__riscos__) || defined(TORCS_STATIC_MODULES)
++/* RISC OS: multitexturing is off unless -M is given. With one texture unit
++   Mesa's software renderer can take its fast textured-triangle path. */
++static bool multiTexture = false;
++#endif
++
+ static void
+ init_args(int argc, char **argv, const char **raceconfig)
+ {
+@@ -71,6 +81,11 @@ init_args(int argc, char **argv, const char **raceconfig)
+ 		} else if(strncmp(argv[i], "-s", 2) == 0) {
+ 			i++;
+ 			SetSingleTextureMode();
++#if defined(__riscos__) || defined(TORCS_STATIC_MODULES)
++		} else if(strncmp(argv[i], "-M", 2) == 0) {
++			i++;
++			multiTexture = true;
++#endif
+ 		} else if(strncmp(argv[i], "-k", 2) == 0) {
+ 			i++;
+ 			// Keep modules in memory (for valgrind)
+@@ -125,8 +140,18 @@ main(int argc, char *argv[])
+ {
+ 	const char *raceconfig = "";
+ 
++#if defined(__riscos__) || defined(TORCS_STATIC_MODULES)
++	RiscosPlatformInit(argc, argv);	/* log file, crash report */
++	init_args(argc, argv, &raceconfig);
++	if (!multiTexture) {
++		SetSingleTextureMode();
++	}
++	RiscosSpecInit();			/* statically linked modules */
++	RiscosSetupDirs();			/* <TORCS$Dir>, <Choices$Write>.TORCS */
++#else
+ 	init_args(argc, argv, &raceconfig);
+ 	LinuxSpecInit();			/* init specific linux functions */
++#endif
+ 
+ 	if(strlen(raceconfig) == 0) {
+ 		GfScrInit(argc, argv);	/* init screen */
+diff --git a/src/linux/riscosplatform.cpp b/src/linux/riscosplatform.cpp
+new file mode 100644
+index 0000000..6e5c828
+--- /dev/null
++++ b/src/linux/riscosplatform.cpp
+@@ -0,0 +1,222 @@
++/***************************************************************************
++
++    file                 : riscosplatform.cpp
++    RISC OS port (riscos-torcs): start-up for the desktop.
++    (C) 2026 Andrew Youll
++
++    - stdout and stderr go to the file named by TORCS$Log (or nowhere):
++      printing from a Wimp task would open a command window.
++    - Crashes are reported with the RISC OS error and a backtrace.
++    - The directories that the Linux launcher script passes with -l/-L/-D
++      default to <Choices$Write>/TORCS (settings) and <TORCS$Dir> (game
++      data and robots), and the settings files are copied there on the
++      first run, as the launcher's setup_linux.sh does.
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include <signal.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++#include <errno.h>
++#include <sys/stat.h>
++#ifdef __riscos__
++#include <kernel.h>
++#include <unixlib/local.h>
++#endif
++
++#include <tgf.h>
++
++#include "riscosspec.h"
++
++/* TORCS_STATIC_MODULES on Linux (a host test of the static modules) builds
++   this file too, without the RISC OS parts. */
++#ifdef __riscos__
++static void
++riscosErrorReport(int signum)
++{
++	const _kernel_oserror *e = _kernel_last_oserror();
++	if (e != NULL) {
++		fprintf(stderr, "\nRISC OS error &%X: %s\n", (unsigned int)e->errnum, e->errmess);
++	}
++	__write_backtrace(signum);
++	fflush(stderr);
++	/* _exit, not exit: memory may be damaged, so run no destructors. */
++	_exit(2);
++}
++
++#endif /* __riscos__ */
++
++void
++RiscosPlatformInit(int /* argc */, char ** /* argv */)
++{
++#ifdef __riscos__
++	/* One file for both streams: on RISC OS a file can be open for writing
++	   only once, so the second stream shares the first one's handle. */
++	const char *log = getenv("TORCS$Log");
++	FILE *fp = fopen((log != NULL && *log != 0) ? log : "/dev/null", "w");
++	if (fp != NULL) {
++		fflush(stdout);
++		fflush(stderr);
++		dup2(fileno(fp), 1);
++		dup2(fileno(fp), 2);
++		fclose(fp);
++		setvbuf(stdout, NULL, _IOLBF, 0);
++		setvbuf(stderr, NULL, _IONBF, 0);
++	}
++
++	signal(SIGEMT, riscosErrorReport);
++	signal(SIGOSERROR, riscosErrorReport);
++	signal(SIGSEGV, riscosErrorReport);
++	signal(SIGBUS, riscosErrorReport);
++	signal(SIGILL, riscosErrorReport);
++	signal(SIGFPE, riscosErrorReport);
++#endif
++}
++
++/* mkdir -p for UnixLib paths such as "/<Choices$Write>/TORCS/config/".
++   The first component (a <variable> or the root) is taken to exist. */
++static void
++makeDirs(const char *path)
++{
++	char buf[1024];
++	snprintf(buf, sizeof(buf), "%s", path);
++	char *p = buf;
++	if (*p == '/') {
++		p++;
++	}
++	if (*p == '<') {
++		p = strchr(p, '>');
++		if (p == NULL) {
++			return;
++		}
++	}
++	for (p = strchr(p, '/'); p != NULL; p = strchr(p + 1, '/')) {
++		*p = 0;
++		mkdir(buf, 0755);
++		*p = '/';
++	}
++	mkdir(buf, 0755);
++}
++
++static bool
++fileExists(const char *path)
++{
++	struct stat st;
++	return stat(path, &st) == 0;
++}
++
++static void
++copyFile(const char *from, const char *to)
++{
++	FILE *in = fopen(from, "rb");
++	if (in == NULL) {
++		printf("RISC OS setup: can't read %s\n", from);
++		return;
++	}
++	FILE *out = fopen(to, "wb");
++	if (out == NULL) {
++		printf("RISC OS setup: can't write %s\n", to);
++		fclose(in);
++		return;
++	}
++	char buf[8192];
++	size_t n;
++	while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
++		fwrite(buf, 1, n, out);
++	}
++	fclose(in);
++	fclose(out);
++}
++
++/* The settings files the Linux launcher copies into ~/.torcs
++   (setup_linux.sh, made from the CONFIG lists in the Makefiles). They are
++   copied when missing; a newer copy in the game (a new version) replaces
++   the old one, which is kept as <file>.old, as on Linux. */
++static const char *const configFiles[] = {
++	"config/raceengine.xml",
++	"config/style.xsl",
++	"config/screen.xml",
++	"config/graph.xml",
++	"config/sound.xml",
++	"config/raceman/champ.xml",
++	"config/raceman/dtmrace.xml",
++	"config/raceman/endrace.xml",
++	"config/raceman/ncrace.xml",
++	"config/raceman/practice.xml",
++	"config/raceman/quickrace.xml",
++	"drivers/human/car.xml",
++	"drivers/human/human.xml",
++	"drivers/human/preferences.xml",
++	NULL
++};
++
++static void
++setupLocalDir(void)
++{
++	char from[1024], to[1024], old[1024];
++	struct stat sf, st;
++
++	for (int i = 0; configFiles[i] != NULL; i++) {
++		snprintf(from, sizeof(from), "%s%s", GetDataDir(), configFiles[i]);
++		snprintf(to, sizeof(to), "%s%s", GetLocalDir(), configFiles[i]);
++		if (stat(from, &sf) != 0) {
++			continue;
++		}
++		if (stat(to, &st) == 0) {
++			if (sf.st_mtime <= st.st_mtime) {
++				continue;
++			}
++			snprintf(old, sizeof(old), "%s.old", to);
++			printf("Saving %s to %s\n", to, old);
++			remove(old);
++			rename(to, old);
++		} else {
++			char dir[1024];
++			snprintf(dir, sizeof(dir), "%s", to);
++			char *slash = strrchr(dir, '/');
++			if (slash != NULL) {
++				*slash = 0;
++				makeDirs(dir);
++			}
++		}
++		copyFile(from, to);
++	}
++}
++
++void
++RiscosSetupDirs(void)
++{
++	if (strlen(GetLocalDir()) == 0) {
++		SetLocalDir("/<Choices$Write>/TORCS/");
++	}
++	if (getenv("TORCS$Dir") != NULL) {
++		if (strlen(GetLibDir()) == 0) {
++			SetLibDir("/<TORCS$Dir>/");
++		}
++		if (strlen(GetDataDir()) == 0) {
++			SetDataDir("/<TORCS$Dir>/");
++		}
++	}
++	char results[1024];
++	makeDirs(GetLocalDir());
++	snprintf(results, sizeof(results), "%sresults", GetLocalDir());
++	makeDirs(results);
++
++	/* The game opens much of its data relative to the current directory,
++	   as the Linux launcher runs it from the data directory. */
++	if (strlen(GetDataDir()) != 0 && chdir(GetDataDir()) != 0) {
++		printf("RISC OS setup: can't change to %s (%s)\n", GetDataDir(), strerror(errno));
++	}
++	setupLocalDir();
++}
+diff --git a/src/modules/telemetry/telemetry.cpp b/src/modules/telemetry/telemetry.cpp
+index 9273a7d..2b3f9d0 100644
+--- a/src/modules/telemetry/telemetry.cpp
++++ b/src/modules/telemetry/telemetry.cpp
+@@ -207,8 +207,12 @@ TlmStopMonitoring(void)
+     TlmData.state = 0;
+     GfOut("Telemetry: stop monitoring\n");
+ 
++#ifndef __riscos__
++    /* RISC OS: no shell to run the plot script (system() would run it as a
++       * command inside the game's memory). The data file is still written. */
+     snprintf(buf, BUFSIZE, "sh %s", TlmData.cmdfile);
+     system(buf);
++#endif
+     free(TlmData.cmdfile);
+ }
+ 

@@ -1,0 +1,124 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Mon, 5 Oct 2026 09:38:21 +0100
+Subject: [PATCH] RISC OS: textures on Mesa's fast textured-triangle path
+
+Software OpenGL (riscos-mesa) draws textured triangles fast only for one
+RGB(A) power-of-two texture in GL_REPEAT or GL_CLAMP_TO_EDGE, and takes
+mipmaps only under GL_FASTEST. On RISC OS (or with TORCS_SOFTWARE_GL on
+a host, for profiling):
+- screen.cpp: glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
+- grtexture.cpp: GL_CLAMP textures become GL_CLAMP_TO_EDGE, luminance
+  textures are expanded to RGB(A);
+- grtrackmap.cpp: the track map is GL_CLAMP_TO_EDGE.
+- grscene.cpp: GL_SINGLE_COLOR lighting. With TORCS's
+  GL_SEPARATE_SPECULAR_COLOR every textured triangle took the general
+  path (host profile, a race frame: 1236M instructions -> 486M).
+---
+ src/libs/tgfclient/screen.cpp               |  7 +++++
+ src/modules/graphic/ssggraph/grscene.cpp    |  8 ++++-
+ src/modules/graphic/ssggraph/grtexture.cpp  | 34 +++++++++++++++++++++
+ src/modules/graphic/ssggraph/grtrackmap.cpp |  6 ++++
+ 4 files changed, 54 insertions(+), 1 deletion(-)
+
+diff --git a/src/libs/tgfclient/screen.cpp b/src/libs/tgfclient/screen.cpp
+index 63224a6..53d966c 100644
+--- a/src/libs/tgfclient/screen.cpp
++++ b/src/libs/tgfclient/screen.cpp
+@@ -417,6 +417,13 @@ void GfScrInit(int argc, char *argv[])
+ 
+     glutReshapeFunc( Reshape );
+ 
++#if defined(__riscos__) || defined(TORCS_SOFTWARE_GL)
++	// Software OpenGL (riscos-mesa): with GL_FASTEST, Mesa's fast textured
++	// triangles take mipmapped textures too (one mipmap level per
++	// triangle) and correct perspective every 16 pixels.
++	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
++#endif
++
+ 	checkGLFeatures();
+ }
+ 
+diff --git a/src/modules/graphic/ssggraph/grscene.cpp b/src/modules/graphic/ssggraph/grscene.cpp
+index 707c4e3..32a737a 100644
+--- a/src/modules/graphic/ssggraph/grscene.cpp
++++ b/src/modules/graphic/ssggraph/grscene.cpp
+@@ -151,7 +151,13 @@ grInitScene(void)
+     /* GUIONS GL_TRUE */
+     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE,GL_FALSE);
+ 
+-#ifdef GL_SEPARATE_SPECULAR_COLOR 
++#if defined(__riscos__) || defined(TORCS_SOFTWARE_GL)
++    // Software OpenGL: Mesa's fast textured triangles need GL_SINGLE_COLOR
++    // (the specular highlight is then modulated by the texture instead of
++    // added after it). With GL_SEPARATE_SPECULAR_COLOR every textured
++    // triangle took the general path.
++    glLightModeli(GL_LIGHT_MODEL_COLOR_CONTROL,GL_SINGLE_COLOR);
++#elif defined(GL_SEPARATE_SPECULAR_COLOR)
+     glLightModeli(GL_LIGHT_MODEL_COLOR_CONTROL,GL_SEPARATE_SPECULAR_COLOR);
+ #else
+ #ifdef GL_SEPARATE_SPECULAR_COLOR_EXT
+diff --git a/src/modules/graphic/ssggraph/grtexture.cpp b/src/modules/graphic/ssggraph/grtexture.cpp
+index 4f9d40f..069ca2d 100644
+--- a/src/modules/graphic/ssggraph/grtexture.cpp
++++ b/src/modules/graphic/ssggraph/grtexture.cpp
+@@ -217,6 +217,40 @@ bool grMakeMipMaps (GLubyte *image, int xsize, int ysize, int zsize, bool mipmap
+     	return false ;
+ 	}
+ 
++#if defined(__riscos__) || defined(TORCS_SOFTWARE_GL)
++	// Software OpenGL (riscos-mesa): keep textures on Mesa's fast textured
++	// triangle path, which takes RGB and RGBA textures in GL_REPEAT or
++	// GL_CLAMP_TO_EDGE (GL_CLAMP blends in the border colour, which only
++	// the slow general path does). The picture differs only at the very
++	// edge of clamped textures. Luminance textures are expanded to RGB(A).
++	{
++		GLint wrap;
++		glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, &wrap);
++		if (wrap == GL_CLAMP) {
++			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++		}
++		glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, &wrap);
++		if (wrap == GL_CLAMP) {
++			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++		}
++		if (zsize == 1 || zsize == 2) {
++			int n = xsize * ysize;
++			int newz = zsize + 2;
++			GLubyte *rgb = new GLubyte[n * newz];
++			for (int i = 0; i < n; i++) {
++				GLubyte l = image[i * zsize];
++				rgb[i * newz] = rgb[i * newz + 1] = rgb[i * newz + 2] = l;
++				if (zsize == 2) {
++					rgb[i * newz + 3] = image[i * zsize + 1];
++				}
++			}
++			delete [] image;
++			image = rgb;
++			zsize = newz;
++		}
++	}
++#endif
++
+ 	GLubyte *texels[20];   // One element per level of MIPmap.
+ 
+ 	for (int l = 0; l < 20; l++) {
+diff --git a/src/modules/graphic/ssggraph/grtrackmap.cpp b/src/modules/graphic/ssggraph/grtrackmap.cpp
+index edc0898..a9b1f0a 100644
+--- a/src/modules/graphic/ssggraph/grtrackmap.cpp
++++ b/src/modules/graphic/ssggraph/grtrackmap.cpp
+@@ -357,8 +357,14 @@ cGrTrackMap::cGrTrackMap()
+ 		glBindTexture(GL_TEXTURE_2D, mapTexture);
+ 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+ 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++#if defined(__riscos__) || defined(TORCS_SOFTWARE_GL)
++		// Software OpenGL: GL_CLAMP keeps the map off Mesa's fast path.
++		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++#else
+ 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+ 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
++#endif
+ 
+ 
+ 		// If GL_ARB_texture_compression is available at runtime, (try to) compress the

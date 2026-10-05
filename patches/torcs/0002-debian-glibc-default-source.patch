@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Aurelien Jarno <aurelien@aurel32.net>
+Date: Mon, 5 Oct 2026 09:31:47 +0100
+Subject: [PATCH] debian: glibc-default-source
+
+From Debian's torcs 1.3.7+dfsg-5 package (debian/patches/glibc-default-source.patch).
+---
+ Make-config.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Make-config.in b/Make-config.in
+index f0e0a12..8041327 100644
+--- a/Make-config.in
++++ b/Make-config.in
+@@ -48,7 +48,7 @@ INSTALL_DATA = @INSTALL_DATA@
+ INSTALL_SCRIPT = @INSTALL_SCRIPT@
+ mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
+ 
+-CFLAGSD = -D_SVID_SOURCE -D_BSD_SOURCE -DSHM -DHAVE_CONFIG_H
++CFLAGSD = -D_DEFAULT_SOURCE -DSHM -DHAVE_CONFIG_H
+ CXXFLAGS =  @CXXFLAGS@ @CPPFLAGS@ ${CFLAGSD}
+ CFLAGS   =  @CFLAGS@ ${CFLAGSD}
+ 

@@ -1,0 +1,488 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Mon, 5 Oct 2026 09:26:16 +0100
+Subject: [PATCH] RISC OS: modules linked in, found through a table
+
+UnixLib has no dlopen. riscosspec.cpp is linuxspec.cpp with the module
+functions working on RiscosModules[] (written by build-torcs.sh from the
+modules it built): a module is found by the name in its .so path, a
+directory scan lists the modules whose directory it is (robots: only
+those whose data directory exists, as on Linux). The clock is
+CLOCK_MONOTONIC (UnixLib reads the HAL counter).
+
+grmain.cpp: linked in, ssggraph's global ssgContext is constructed at
+program start, before there is an OpenGL context, so the state its
+constructor sets never reached OpenGL; initTrack sets it again.
+---
+ src/linux/riscosspec.cpp                | 393 ++++++++++++++++++++++++
+ src/linux/riscosspec.h                  |  43 +++
+ src/modules/graphic/ssggraph/grmain.cpp |   6 +
+ 3 files changed, 442 insertions(+)
+ create mode 100644 src/linux/riscosspec.cpp
+ create mode 100644 src/linux/riscosspec.h
+
+diff --git a/src/linux/riscosspec.cpp b/src/linux/riscosspec.cpp
+new file mode 100644
+index 0000000..1540039
+--- /dev/null
++++ b/src/linux/riscosspec.cpp
+@@ -0,0 +1,393 @@
++/***************************************************************************
++
++    file                 : riscosspec.cpp
++    RISC OS port (riscos-torcs), based on linuxspec.cpp
++    (C) 2000 by Eric Espie; RISC OS changes 2026 Andrew Youll
++
++    UnixLib has no dlopen, so every module (graphics, physics, track
++    loader, robots) is linked into the program. Each was partly linked on
++    its own with only its entry points left global (Make-default.mk), and
++    build/build-torcs.sh lists them in RiscosModules[]. The functions here
++    keep the Linux behaviour: a module is found by the name in its .so
++    path, and a directory scan lists the modules that live there.
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include <stdlib.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <string.h>
++#include <strings.h>
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <dirent.h>
++#include <time.h>
++#include <unistd.h>
++
++#include <tgf.h>
++
++#include "os.h"
++#include "riscosspec.h"
++
++bool bKeepModules = false;
++
++/* "path/to/name.so" -> "name" */
++static void
++modName(const char *sopath, char *dname, size_t size)
++{
++	const char *lastSlash = strrchr(sopath, '/');
++	snprintf(dname, size, "%s", lastSlash ? lastSlash + 1 : sopath);
++	size_t len = strlen(dname);
++	if (len > 3 && strcmp(dname + len - 3, ".so") == 0) {
++		dname[len - 3] = 0;
++	}
++}
++
++static const tRiscosModule *
++findModule(const char *name)
++{
++	for (const tRiscosModule *m = RiscosModules; m->name; m++) {
++		if (strcmp(m->name, name) == 0) {
++			return m;
++		}
++	}
++	return NULL;
++}
++
++/* Does the directory path (as the game builds it, e.g.
++   "/<TORCS$Dir>/drivers/") end with the module directory dir? */
++static bool
++dirMatches(const char *path, const char *dir, size_t dirlen)
++{
++	size_t len = strlen(path);
++	while (len > 0 && path[len - 1] == '/') {
++		len--;
++	}
++	if (len < dirlen || strncmp(path + len - dirlen, dir, dirlen) != 0) {
++		return false;
++	}
++	return len == dirlen || path[len - dirlen - 1] == '/';
++}
++
++/* Add curMod to the circular list, sorted by priority (as linuxspec). */
++static void
++addSorted(tModList *curMod, tModList **modlist)
++{
++	tModList *cMod;
++	int prio;
++
++	if (*modlist == NULL) {
++		*modlist = curMod;
++		curMod->next = curMod;
++		return;
++	}
++	prio = curMod->modInfo[0].prio;
++	if (prio >= (*modlist)->modInfo[0].prio) {
++		curMod->next = (*modlist)->next;
++		(*modlist)->next = curMod;
++		*modlist = curMod;
++	} else {
++		cMod = *modlist;
++		do {
++			if (prio < cMod->next->modInfo[0].prio) {
++				curMod->next = cMod->next;
++				cMod->next = curMod;
++				break;
++			}
++			cMod = cMod->next;
++		} while (cMod != *modlist);
++	}
++}
++
++static int
++riscosModLoad(unsigned int /* gfid */, char *sopath, tModList **modlist)
++{
++	char dname[256];
++	const tRiscosModule *m;
++	tModList *curMod;
++
++	modName(sopath, dname, sizeof(dname));
++	m = findModule(dname);
++	if (m == NULL) {
++		printf("riscosModLoad: %s is not linked in\n", dname);
++		return -1;
++	}
++
++	curMod = (tModList*)calloc(1, sizeof(tModList));
++	if (m->info(curMod->modInfo) != 0) {
++		printf("riscosModLoad: Module: %s not loaded\n", dname);
++		free(curMod);
++		return -1;
++	}
++	GfOut(">>> %s >>>\n", sopath);
++	curMod->handle = (void *)m;
++	curMod->sopath = strdup(sopath);
++	if (*modlist == NULL) {
++		*modlist = curMod;
++		curMod->next = curMod;
++	} else {
++		curMod->next = (*modlist)->next;
++		(*modlist)->next = curMod;
++		*modlist = curMod;
++	}
++	return 0;
++}
++
++static int
++riscosModInfo(unsigned int /* gfid */, char *sopath, tModList **modlist)
++{
++	char dname[256];
++	const tRiscosModule *m;
++	tModList *curMod;
++
++	modName(sopath, dname, sizeof(dname));
++	m = findModule(dname);
++	if (m == NULL) {
++		printf("riscosModInfo: %s is not linked in\n", dname);
++		return -1;
++	}
++
++	curMod = (tModList*)calloc(1, sizeof(tModList));
++	if (m->info(curMod->modInfo) != 0) {
++		printf("riscosModInfo: Module: %s not loaded\n", dname);
++		free(curMod);
++		return -1;
++	}
++	GfOut("Request Info for %s\n", sopath);
++	curMod->handle = NULL;
++	curMod->sopath = strdup(sopath);
++	addSorted(curMod, modlist);
++	return 0;
++}
++
++/* The modules directly in dir ("modules/simu" style). */
++static int
++riscosModLoadDir(unsigned int gfid, char *dir, tModList **modlist)
++{
++	char sopath[512];
++	int modnb = 0;
++
++	for (const tRiscosModule *m = RiscosModules; m->name; m++) {
++		if (!dirMatches(dir, m->dir, strlen(m->dir))) {
++			continue;
++		}
++		tModList *curMod = (tModList*)calloc(1, sizeof(tModList));
++		snprintf(sopath, sizeof(sopath), "%s/%s.%s", dir, m->name, DLLEXT);
++		if ((m->info(curMod->modInfo) == 0) && (curMod->modInfo[0].gfId == gfid)) {
++			GfOut(">>> %s loaded >>>\n", sopath);
++			modnb++;
++			curMod->handle = (void *)m;
++			curMod->sopath = strdup(sopath);
++			addSorted(curMod, modlist);
++		} else {
++			GfTrace("riscosModLoadDir: Module: %s not retained\n", m->name);
++			free(curMod);
++		}
++	}
++	return modnb;
++}
++
++/* level 0: the modules directly in dir; level 1: the modules in dir's
++   subdirectories, one each (the robots: dir/<name>/<name>.so). At level 1
++   only robots whose data directory is there are listed, as on Linux,
++   where the directory holds both. */
++static int
++riscosModInfoDir(unsigned int /* gfid */, char *dir, int level, tModList **modlist)
++{
++	char sopath[512];
++	int modnb = 0;
++
++	for (const tRiscosModule *m = RiscosModules; m->name; m++) {
++		size_t dirlen = strlen(m->dir);
++		if (level == 1) {
++			const char *slash = strrchr(m->dir, '/');
++			if (slash == NULL || strcmp(slash + 1, m->name) != 0) {
++				continue;
++			}
++			dirlen = slash - m->dir;
++		}
++		if (!dirMatches(dir, m->dir, dirlen)) {
++			continue;
++		}
++		if (level == 1) {
++			struct stat st;
++			snprintf(sopath, sizeof(sopath), "%s/%s", dir, m->name);
++			if (stat(sopath, &st) != 0 || !S_ISDIR(st.st_mode)) {
++				continue;
++			}
++			snprintf(sopath, sizeof(sopath), "%s/%s/%s.%s", dir, m->name, m->name, DLLEXT);
++		} else {
++			snprintf(sopath, sizeof(sopath), "%s/%s.%s", dir, m->name, DLLEXT);
++		}
++		tModList *curMod = (tModList*)calloc(1, sizeof(tModList));
++		GfOut("Request Info for %s\n", sopath);
++		if (m->info(curMod->modInfo) == 0) {
++			modnb++;
++			curMod->handle = NULL;
++			curMod->sopath = strdup(sopath);
++			addSorted(curMod, modlist);
++		} else {
++			GfTrace("riscosModInfoDir: Module: %s not retained\n", m->name);
++			free(curMod);
++		}
++	}
++	return modnb;
++}
++
++static int
++riscosModUnloadList(tModList **modlist)
++{
++	tModList *curMod;
++	tModList *nextMod;
++
++	curMod = *modlist;
++	if (curMod == 0) {
++		return 0;
++	}
++
++	nextMod = curMod->next;
++	do {
++		curMod = nextMod;
++		nextMod = curMod->next;
++		GfOut("<<< %s unloaded <<<\n", curMod->sopath);
++
++		const tRiscosModule *m = (const tRiscosModule *)curMod->handle;
++		if (m != NULL && m->shut != NULL) {
++			GfOut("Call %sShut\n", m->name);
++			m->shut();
++		}
++
++		for (int i = 0; i < MAX_MOD_ITF; i++) {
++			if (curMod->modInfo[i].name) {
++				free(curMod->modInfo[i].name);
++				free(curMod->modInfo[i].desc);
++			}
++		}
++
++		free(curMod->sopath);
++		free(curMod);
++	} while (curMod != *modlist);
++
++	*modlist = (tModList *)NULL;
++	return 0;
++}
++
++static int
++riscosModFreeInfoList(tModList **modlist)
++{
++	tModList *curMod;
++	tModList *nextMod;
++
++	curMod = *modlist;
++	nextMod = curMod->next;
++	do {
++		curMod = nextMod;
++		nextMod = curMod->next;
++		for (int i = 0; i < MAX_MOD_ITF; i++) {
++			if (curMod->modInfo[i].name) {
++				free(curMod->modInfo[i].name);
++				free(curMod->modInfo[i].desc);
++			}
++		}
++		free(curMod->sopath);
++		free(curMod);
++	} while (curMod != *modlist);
++
++	*modlist = (tModList *)NULL;
++	return 0;
++}
++
++/* Insert curf into the sorted circular list (as linuxspec). */
++static tFList *
++insertSorted(tFList *flist, tFList *curf)
++{
++	if (flist == (tFList*)NULL) {
++		curf->next = curf;
++		curf->prev = curf;
++		return curf;
++	}
++	if (strcasecmp(curf->name, flist->name) > 0) {
++		do {
++			flist = flist->next;
++		} while ((strcasecmp(curf->name, flist->name) > 0) && (strcasecmp(flist->name, flist->prev->name) > 0));
++		flist = flist->prev;
++	} else {
++		do {
++			flist = flist->prev;
++		} while ((strcasecmp(curf->name, flist->name) < 0) && (strcasecmp(flist->name, flist->next->name) < 0));
++	}
++	curf->next = flist->next;
++	flist->next = curf;
++	curf->prev = flist;
++	curf->next->prev = curf;
++	return curf;
++}
++
++static tFList *
++riscosDirGetListFiltered(const char *dir, const char *suffix)
++{
++	DIR *dp;
++	struct dirent *ep;
++	tFList *flist = (tFList*)NULL;
++	int suffixLg = (suffix != NULL) ? strlen(suffix) : 0;
++
++	dp = opendir(dir);
++	if (dp != NULL) {
++		while ((ep = readdir(dp)) != 0) {
++			int fnameLg = strlen(ep->d_name);
++			if ((strcmp(ep->d_name, ".") == 0) || (strcmp(ep->d_name, "..") == 0)) {
++				continue;
++			}
++			if (suffixLg > 0 && !((fnameLg > suffixLg) && (strcmp(ep->d_name + fnameLg - suffixLg, suffix) == 0))) {
++				continue;
++			}
++			tFList *curf = (tFList*)calloc(1, sizeof(tFList));
++			curf->name = strdup(ep->d_name);
++			flist = insertSorted(flist, curf);
++		}
++		closedir(dp);
++	}
++	return flist;
++}
++
++static tFList *
++riscosDirGetList(const char *dir)
++{
++	return riscosDirGetListFiltered(dir, NULL);
++}
++
++/* The monotonic clock: UnixLib reads the HAL counter (sub-millisecond),
++   where gettimeofday is only as fine as the centisecond clock. */
++static double
++riscosTimeClock(void)
++{
++	struct timespec ts;
++
++	clock_gettime(CLOCK_MONOTONIC, &ts);
++	return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
++}
++
++void
++RiscosSpecInit(void)
++{
++	memset(&GfOs, 0, sizeof(GfOs));
++
++	GfOs.modLoad = riscosModLoad;
++	GfOs.modLoadDir = riscosModLoadDir;
++	GfOs.modUnloadList = riscosModUnloadList;
++	GfOs.modInfo = riscosModInfo;
++	GfOs.modInfoDir = riscosModInfoDir;
++	GfOs.modFreeInfoList = riscosModFreeInfoList;
++	GfOs.dirGetList = riscosDirGetList;
++	GfOs.dirGetListFiltered = riscosDirGetListFiltered;
++	GfOs.timeClock = riscosTimeClock;
++}
+diff --git a/src/linux/riscosspec.h b/src/linux/riscosspec.h
+new file mode 100644
+index 0000000..d033987
+--- /dev/null
++++ b/src/linux/riscosspec.h
+@@ -0,0 +1,43 @@
++/***************************************************************************
++
++    file                 : riscosspec.h
++    RISC OS port (riscos-torcs): the OS-specific functions, with the modules
++    linked in statically.
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#ifndef _RISCOSSPEC_H_
++#define _RISCOSSPEC_H_
++
++#include <tgf.h>
++
++/* One statically linked module. build/build-torcs.sh writes the table
++   (riscos_modtab.cpp) from the modules it built:
++     dir   the module's directory as on Linux, e.g. "modules/graphic" or
++           "drivers/berniw"
++     name  the module (and entry point) name, e.g. "ssggraph" */
++typedef struct {
++	const char *dir;
++	const char *name;
++	tfModInfo info;
++	tfModShut shut;		/* NULL if the module has no <name>Shut */
++} tRiscosModule;
++
++extern const tRiscosModule RiscosModules[];	/* ends with a NULL name */
++
++extern void RiscosSpecInit(void);
++
++/* riscosplatform.cpp */
++extern void RiscosPlatformInit(int argc, char *argv[]);
++extern void RiscosSetupDirs(void);
++
++#endif /* _RISCOSSPEC_H_ */
+diff --git a/src/modules/graphic/ssggraph/grmain.cpp b/src/modules/graphic/ssggraph/grmain.cpp
+index 2a794ed..cdaa49c 100644
+--- a/src/modules/graphic/ssggraph/grmain.cpp
++++ b/src/modules/graphic/ssggraph/grmain.cpp
+@@ -456,6 +456,12 @@ initTrack(tTrack *track)
+ 	// The inittrack does as well init the context, that is highly inconsistent, IMHO.
+ 	// TODO: Find a solution to init the graphics first independent of objects.
+ 	grContext.makeCurrent();
++#if defined(__riscos__) || defined(TORCS_STATIC_MODULES)
++	// Linked in rather than loaded (RISC OS), grContext was constructed at
++	// program start, before there was an OpenGL context, so the state its
++	// constructor set never reached OpenGL. Set it now.
++	grContext.getState()->force();
++#endif
+ 
+ 	grTrackHandle = GfParmReadFile(track->filename, GFPARM_RMODE_STD | GFPARM_RMODE_CREAT);
+ 	grLoadScene(track);

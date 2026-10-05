@@ -1,0 +1,8 @@
+0001-debian-gcc6-isnan.patch
+0002-debian-glibc-default-source.patch
+0003-debian-format-argument.patch
+0004-debian-gcc7.patch
+0005-RISC-OS-static-cross-build.patch
+0006-RISC-OS-modules-linked-in-found-through-a-table.patch
+0007-RISC-OS-desktop-start-up-no-exec-or-shell-single-tex.patch
+0008-RISC-OS-textures-on-Mesa-s-fast-textured-triangle-pa.patch

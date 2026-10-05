@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Debian Games Team <pkg-games-devel@lists.alioth.debian.org>
+Date: Mon, 5 Oct 2026 09:31:47 +0100
+Subject: [PATCH] debian: gcc7
+
+From Debian's torcs 1.3.7+dfsg-5 package (debian/patches/gcc7.patch).
+---
+ src/libs/musicplayer/OpenALMusicPlayer.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/libs/musicplayer/OpenALMusicPlayer.cpp b/src/libs/musicplayer/OpenALMusicPlayer.cpp
+index c2ca83f..f4f4429 100644
+--- a/src/libs/musicplayer/OpenALMusicPlayer.cpp
++++ b/src/libs/musicplayer/OpenALMusicPlayer.cpp
+@@ -161,7 +161,7 @@ bool OpenALMusicPlayer::streamBuffer(ALuint buffer)
+ {
+ 	char pcm[BUFFERSIZE];
+ 	int size = 0;
+-	const char* error = '\0';
++	const char* error = nullptr;
+ 	
+ 	if (!stream->read(pcm, BUFFERSIZE, &size, &error)) {
+ 		GfError("OpenALMusicPlayer: Stream read error: %s\n", error);
+@@ -268,4 +268,4 @@ bool OpenALMusicPlayer::startPlayback()
+     alSourcePlay(source);
+     
+     return true;
+-}
+\ No newline at end of file
++}

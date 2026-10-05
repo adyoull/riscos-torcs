@@ -1,0 +1,31 @@
+Licences of TORCS for RISC OS
+=============================
+
+The program !RunImage contains TORCS and the libraries below, all linked
+into one file. The source code of TORCS, the RISC OS changes and the
+scripts that build everything are in the riscos-torcs repository
+(patches against Debian's torcs 1.3.7+dfsg source); the libraries'
+sources are the tarballs named in its build/SHA256SUMS. GPL section 3:
+the corresponding source is available from the same place as this zip.
+
+TORCS 1.3.7 (Debian's torcs_1.3.7+dfsg source)     GNU GPL 2 or later:
+    COPYING. Some files are under other licences; the game data (cars,
+    tracks, robots' settings) too: TORCS-data (Debian's copyright file,
+    which lists them).
+plib 1.8.5 (sg, ssg, ssgAux, ul, js, sl)          GNU LGPL 2 or later,
+    with Steve Baker's linking exception: plib-COPYING.
+freealut 1.1.0                                     GNU LGPL 2:
+    freealut-COPYING.
+libpng 1.6.37                                      libpng licence:
+    libpng-LICENSE.
+libogg 1.3.5, libvorbis 1.3.7                      BSD licences:
+    libogg-COPYING, libvorbis-COPYING.
+riscos-mesa devkit 12f: Mesa (OSMesa), riscos-mesa's EGL, GLU,
+    freeglut, SDL 2, OpenAL Soft, zlib, UnixLib (the C library) and
+    the PThreadTicker module: riscos-mesa-devkit-LICENCES (and
+    PThreadTicker-Licence in the application).
+
+The LGPL libraries (plib, freealut, OpenAL Soft) are linked statically.
+To relink TORCS with a changed version of one of them, build it from
+the riscos-torcs repository (build/build-deps.sh, then
+build/build-torcs.sh): every object file and script is there.

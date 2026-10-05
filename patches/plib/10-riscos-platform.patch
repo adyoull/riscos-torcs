@@ -1,0 +1,483 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Mon, 5 Oct 2026 09:05:43 +0100
+Subject: [PATCH] RISC OS platform: UL_RISCOS, a Joystick SWI back end for js,
+ silent sl
+
+ul.h: UL_RISCOS (GCCSDK defines __riscos__, not __unix__), unistd/fcntl,
+and a ulDynamicLibrary that always fails (UnixLib has no dlopen).
+ssg.cxx: the current-context check uses EGL (riscos-mesa) instead of GLX.
+js/jsRISCOS.cxx: USBJoystick's slot API, else Joystick_Read stick 0.
+sl: a slDSP that never works (no sound device), so sl/sm build and play
+nothing; RISC OS programs use OpenAL for sound.
+---
+ src/js/jsRISCOS.cxx    | 314 +++++++++++++++++++++++++++++++++++++++++
+ src/sl/sl.h            |   2 +
+ src/sl/slDSP.cxx       |  32 +++++
+ src/sl/slPortability.h |   4 +
+ src/ssg/ssg.cxx        |   4 +
+ src/util/ul.h          |  26 ++++
+ 6 files changed, 382 insertions(+)
+ create mode 100644 src/js/jsRISCOS.cxx
+
+diff --git a/src/js/jsRISCOS.cxx b/src/js/jsRISCOS.cxx
+new file mode 100644
+index 0000000..79ddd00
+--- /dev/null
++++ b/src/js/jsRISCOS.cxx
+@@ -0,0 +1,314 @@
++/*
++     PLIB - A Suite of Portable Game Libraries
++     Copyright (C) 1998,2002  Steve Baker
++
++     This library is free software; you can redistribute it and/or
++     modify it under the terms of the GNU Library General Public
++     License as published by the Free Software Foundation; either
++     version 2 of the License, or (at your option) any later version.
++
++     This library is distributed in the hope that it will be useful,
++     but WITHOUT ANY WARRANTY; without even the implied warranty of
++     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++     Library General Public License for more details.
++
++     You should have received a copy of the GNU Library General Public
++     License along with this library; if not, write to the Free Software
++     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307  USA
++
++     For further information visit http://plib.sourceforge.net
++*/
++
++/*
++   jsJoystick for RISC OS (riscos-torcs), through the Joystick SWIs:
++
++   - USBJoystick 0.23 or later (Richard Walker): its slot API.
++     Joystick_Enumerate (&43F44) gives a mask of attached devices;
++     jsJoystick(n) is the n-th of them. Joystick_DeviceInfo (&43F45) gives
++     the name and button count, Joystick_AxisInfo (&43F46) the axes (type
++     and raw min/mid/max), Joystick_AxisValues (&43F47) the raw values
++     and up to 32 buttons. Analogue axes are given in the order X, Y, Z,
++     RZ, RX, RY, slider; then the first hat (or D-pad) as two more axes
++     (-1..1, Y -1 = up), as plib's Linux back end reports hats.
++   - Any other Joystick module: jsJoystick(0) is stick 0 by Joystick_Read
++     (&43F40, R0 = 256: 16-bit X and Y, 32 buttons).
++   - No Joystick module: no joysticks (notWorking()).
++
++   The SWI details follow the RISC OS port of YSFlight (riscos-ysflight,
++   ysjoystick/src/riscos/ysjoyreader.cpp).
++*/
++
++#include "js.h"
++
++#if defined (UL_RISCOS)
++
++#include <stdint.h>
++#include <kernel.h>
++
++#define Joystick_Read        0x43F40
++#define Joystick_Enumerate   0x43F44
++#define Joystick_DeviceInfo  0x43F45
++#define Joystick_AxisInfo    0x43F46
++#define Joystick_AxisValues  0x43F47
++
++/* USBJoystick's axis types */
++enum
++{
++  UJ_AXIS_HATX = 1, UJ_AXIS_HATY = 2, UJ_AXIS_DPADX = 3, UJ_AXIS_DPADY = 4,
++  UJ_AXIS_X = 5, UJ_AXIS_Y = 6, UJ_AXIS_Z = 7, UJ_AXIS_RX = 8,
++  UJ_AXIS_RY = 9, UJ_AXIS_RZ = 10, UJ_AXIS_SLIDER = 11
++} ;
++
++/* Leading fields of the records USBJoystick returns. Record sizes come
++   from the SWIs, so later versions can add fields. */
++struct UJDeviceInfo
++{
++  uint32_t size ;
++  const char *manufacturer ;
++  const char *product ;
++  const char *serial ;
++  uint32_t vendor_id ;
++  uint32_t product_id ;
++  uint32_t num_axes ;
++  uint32_t num_buttons ;
++  uint32_t num_hats ;
++} ;
++
++struct UJAxisInfo
++{
++  uint32_t hid_usage_page ;
++  uint32_t hid_usage ;
++  uint32_t type ;
++  const char *name ;
++  int32_t min, mid, max ;
++  int32_t is_digital ;
++} ;
++
++struct os_specific_s
++{
++  int native ;                      /* 1: slot API, 0: Joystick_Read */
++  int slot ;
++  int module_axis [ _JS_MAX_AXES ] ; /* module axis index, -1 = hat */
++  int hat_x, hat_y ;                /* module axis indices, or -1 */
++  int num_analogue ;
++} ;
++
++
++/* The slot of the n-th attached device, or -1. *api is set to 1 if the
++   slot API answered at all. */
++static int jsRISCOSSlot ( int n, int *api )
++{
++  _kernel_swi_regs r ;
++  *api = 0 ;
++  if ( _kernel_swi ( Joystick_Enumerate, &r, &r ) != NULL )
++    return -1 ;
++  *api = 1 ;
++  unsigned int mask = (unsigned int) r.r[0] ;
++  for ( int slot = 0 ; slot < 32 ; slot++ )
++    if ( mask & ( 1u << slot ) )
++      if ( n-- == 0 )
++        return slot ;
++  return -1 ;
++}
++
++
++void jsJoystick::open ()
++{
++  _kernel_swi_regs r ;
++  int api ;
++
++  name [ 0 ] = '\0' ;
++  num_axes = num_buttons = 0 ;
++  error = JS_TRUE ;
++
++  for ( int i = 0 ; i < _JS_MAX_AXES ; i++ )
++  {
++    os->module_axis [ i ] = -1 ;
++    max [ i ] = 1.0f ; center [ i ] = 0.0f ; min [ i ] = -1.0f ;
++    dead_band [ i ] = 0.0f ; saturate [ i ] = 1.0f ;
++  }
++  os->hat_x = os->hat_y = -1 ;
++  os->num_analogue = 0 ;
++
++  os->slot = jsRISCOSSlot ( id, &api ) ;
++
++  if ( os->slot < 0 )
++  {
++    /* No slot API (or not that many devices): stick 0 by Joystick_Read,
++       when no slot API exists at all. */
++    if ( api || id != 0 )
++      return ;
++    r.r[0] = 256 ;
++    if ( _kernel_swi ( Joystick_Read, &r, &r ) != NULL )
++      return ;
++    os->native = 0 ;
++    strcpy ( name, "Joystick (Joystick_Read)" ) ;
++    num_axes = 2 ;
++    num_buttons = 32 ;
++    for ( int i = 0 ; i < 2 ; i++ )
++    {
++      min [ i ] = 0.0f ; center [ i ] = 32768.0f ; max [ i ] = 65535.0f ;
++    }
++    error = JS_FALSE ;
++    return ;
++  }
++
++  os->native = 1 ;
++
++  r.r[0] = os->slot ;
++  if ( _kernel_swi ( Joystick_DeviceInfo, &r, &r ) != NULL || r.r[2] == 0 )
++    return ;
++  const UJDeviceInfo *dev = (const UJDeviceInfo *) r.r[2] ;
++  snprintf ( name, sizeof(name), "%s",
++             ( dev->product != NULL && dev->product[0] != '\0' ) ?
++               dev->product : "USB joystick" ) ;
++  num_buttons = (int) dev->num_buttons ;
++  if ( num_buttons > _JS_MAX_BUTTONS )
++    num_buttons = _JS_MAX_BUTTONS ;
++
++  r.r[0] = os->slot ;
++  if ( _kernel_swi ( Joystick_AxisInfo, &r, &r ) != NULL || r.r[3] == 0 ||
++       r.r[1] < (int) sizeof(UJAxisInfo) )
++    return ;
++  const int rec_size = r.r[1], n_axis = r.r[2] ;
++  const unsigned char *rec = (const unsigned char *) r.r[3] ;
++
++  static const unsigned int order [] =
++  {
++    UJ_AXIS_X, UJ_AXIS_Y, UJ_AXIS_Z, UJ_AXIS_RZ, UJ_AXIS_RX, UJ_AXIS_RY,
++    UJ_AXIS_SLIDER
++  } ;
++  int used = 0 ;
++  for ( unsigned int o = 0 ; o < sizeof(order)/sizeof(order[0]) ; o++ )
++    for ( int a = 0 ; a < n_axis && used < _JS_MAX_AXES - 2 ; a++ )
++    {
++      UJAxisInfo ai ;
++      memcpy ( &ai, rec + a * rec_size, sizeof(ai) ) ;
++      if ( ai.type == order [ o ] && ai.is_digital == 0 )
++      {
++        os->module_axis [ used ] = a ;
++        min    [ used ] = (float) ai.min ;
++        center [ used ] = (float) ai.mid ;
++        max    [ used ] = (float) ai.max ;
++        used++ ;
++      }
++    }
++  os->num_analogue = used ;
++
++  /* The first hat, else the first D-pad, as two more axes. */
++  for ( int pass = 0 ; pass < 2 && os->hat_x < 0 ; pass++ )
++  {
++    const unsigned int tx = ( pass == 0 ) ? UJ_AXIS_HATX : UJ_AXIS_DPADX ;
++    const unsigned int ty = ( pass == 0 ) ? UJ_AXIS_HATY : UJ_AXIS_DPADY ;
++    int ax = -1, ay = -1 ;
++    for ( int a = 0 ; a < n_axis ; a++ )
++    {
++      UJAxisInfo ai ;
++      memcpy ( &ai, rec + a * rec_size, sizeof(ai) ) ;
++      if ( ai.type == tx && ax < 0 ) ax = a ;
++      if ( ai.type == ty && ay < 0 ) ay = a ;
++    }
++    if ( ax >= 0 && ay >= 0 )
++    {
++      os->hat_x = ax ;
++      os->hat_y = ay ;
++    }
++  }
++
++  num_axes = used + ( ( os->hat_x >= 0 ) ? 2 : 0 ) ;
++  error = JS_FALSE ;
++}
++
++
++void jsJoystick::close ()
++{
++  if ( os != NULL )
++    delete os ;
++  os = NULL ;
++  error = JS_TRUE ;
++}
++
++
++jsJoystick::jsJoystick ( int ident )
++{
++  id = ident ;
++  os = new struct os_specific_s ;
++  os->native = 0 ;
++  os->slot = -1 ;
++  open () ;
++}
++
++
++void jsJoystick::rawRead ( int *buttons, float *axes )
++{
++  _kernel_swi_regs r ;
++
++  if ( error || os == NULL )
++  {
++    if ( buttons ) *buttons = 0 ;
++    if ( axes )
++      for ( int i = 0 ; i < num_axes ; i++ )
++        axes [ i ] = center [ i ] ;
++    return ;
++  }
++
++  if ( ! os->native )
++  {
++    r.r[0] = 256 ;
++    if ( _kernel_swi ( Joystick_Read, &r, &r ) != NULL )
++    {
++      if ( buttons ) *buttons = 0 ;
++      if ( axes ) { axes [ 0 ] = axes [ 1 ] = 32768.0f ; }
++      return ;
++    }
++    const unsigned int pos = (unsigned int) r.r[0] ;
++    if ( buttons ) *buttons = (int) r.r[1] ;
++    if ( axes )
++    {
++      axes [ 0 ] = (float) ( ( pos >> 16 ) & 0xFFFF ) ;
++      /* Joystick_Read's Y is 65535 at the top; plib's is smaller at the
++         top, as Linux reports it. */
++      axes [ 1 ] = (float) ( 65535 - (int) ( pos & 0xFFFF ) ) ;
++    }
++    return ;
++  }
++
++  r.r[0] = os->slot ;
++  if ( _kernel_swi ( Joystick_AxisValues, &r, &r ) != NULL || r.r[3] == 0 )
++  {
++    /* Unplugged: centred and released */
++    if ( buttons ) *buttons = 0 ;
++    if ( axes )
++      for ( int i = 0 ; i < num_axes ; i++ )
++        axes [ i ] = center [ i ] ;
++    return ;
++  }
++  const int val_size = r.r[1], n_axis = r.r[2] ;
++  const unsigned char *val = (const unsigned char *) r.r[3] ;
++
++  if ( buttons )
++  {
++    unsigned int b = (unsigned int) r.r[4] ;
++    if ( num_buttons < 32 ) b &= ( 1u << num_buttons ) - 1 ;
++    *buttons = (int) b ;
++  }
++
++  if ( axes )
++  {
++    for ( int i = 0 ; i < num_axes ; i++ )
++    {
++      int a = ( i < os->num_analogue ) ? os->module_axis [ i ] :
++              ( i == os->num_analogue ) ? os->hat_x : os->hat_y ;
++      int32_t v = 0 ;
++      if ( a >= 0 && a < n_axis && val_size >= 4 )
++        memcpy ( &v, val + a * val_size, 4 ) ;
++      else if ( i < os->num_analogue )
++        v = (int32_t) center [ i ] ;
++      axes [ i ] = (float) v ;
++    }
++  }
++}
++
++void jsInit () {}
++
++#endif
+diff --git a/src/sl/sl.h b/src/sl/sl.h
+index 65325eb..634427a 100644
+--- a/src/sl/sl.h
++++ b/src/sl/sl.h
+@@ -44,6 +44,8 @@
+ #define SLDSP_DEFAULT_DEVICE "/dev/audio"
+ #elif defined(UL_MACINTOSH) || defined(UL_MAC_OSX)
+ #define SLDSP_DEFAULT_DEVICE "dsp" // dummy
++#elif defined(UL_RISCOS)
++#define SLDSP_DEFAULT_DEVICE "dsp" // dummy: no sound output (use OpenAL)
+ #else
+ #error "Port me !"
+ #endif
+diff --git a/src/sl/slDSP.cxx b/src/sl/slDSP.cxx
+index 933e20b..1d1734b 100644
+--- a/src/sl/slDSP.cxx
++++ b/src/sl/slDSP.cxx
+@@ -1083,3 +1083,35 @@ float slDSP::secondsUsed ()
+ #endif
+ 
+ 
++#ifdef UL_RISCOS
++
++/*
++  RISC OS: no sound device. slDSP never works, so sl's scheduler plays
++  nothing; programs that want sound on RISC OS use OpenAL (riscos-mesa's
++  devkit, through SDL's SharedSoundBuffer driver).
++*/
++
++void slDSP::open ( const char *, int _rate, int _stereo, int _bps )
++{
++  fd = -1 ;
++  rate = _rate ; stereo = _stereo ; bps = _bps ;
++  error = SL_TRUE ;
++}
++
++void slDSP::close () {}
++
++int slDSP::getDriverBufferSize () { return 0 ; }
++
++void slDSP::getBufferInfo () {}
++
++void slDSP::write ( void *, size_t ) {}
++
++float slDSP::secondsRemaining () { return 0.0f ; }
++
++float slDSP::secondsUsed () { return 0.0f ; }
++
++void slDSP::sync () {}
++
++void slDSP::stop () {}
++
++#endif
+diff --git a/src/sl/slPortability.h b/src/sl/slPortability.h
+index a5ba64b..4c1f5af 100644
+--- a/src/sl/slPortability.h
++++ b/src/sl/slPortability.h
+@@ -82,6 +82,10 @@
+ 
+ /* Tom */
+ 
++#ifdef UL_RISCOS
++#  include <sys/ioctl.h>
++#endif
++
+ #ifdef UL_IRIX
+ #  include <audio.h>
+ #endif
+diff --git a/src/ssg/ssg.cxx b/src/ssg/ssg.cxx
+index bf678b3..5a1fdeb 100644
+--- a/src/ssg/ssg.cxx
++++ b/src/ssg/ssg.cxx
+@@ -31,6 +31,8 @@
+ #  include <OpenGL/CGLCurrent.h>
+ #elif defined(UL_WIN32)
+    /* Nothing */
++#elif defined(UL_RISCOS)
++#  include <EGL/egl.h>
+ #else
+ #  include <GL/glx.h>
+ #endif
+@@ -45,6 +47,8 @@ static bool glIsValidContext ( void )
+   return ( aglGetCurrentContext () != NULL ) ;
+ #elif defined(UL_MAC_OSX)
+   return ( CGLGetCurrentContext () != NULL ) ;
++#elif defined(UL_RISCOS)
++  return ( eglGetCurrentContext () != EGL_NO_CONTEXT ) ;
+ #else
+   return ( glXGetCurrentContext () != NULL ) ;
+ #endif
+diff --git a/src/util/ul.h b/src/util/ul.h
+index d747047..c537ca3 100644
+--- a/src/util/ul.h
++++ b/src/util/ul.h
+@@ -76,6 +76,10 @@
+ 
+ #define UL_LINUX     1
+ 
++#elif defined(__riscos__)
++
++#define UL_RISCOS    1    /* RISC OS with UnixLib (GCCSDK) */
++
+ #elif defined(__sgi)
+ 
+ #define UL_IRIX      1
+@@ -139,6 +143,11 @@
+ #define  UL_GLX     1
+ #endif
+ 
++#ifdef UL_RISCOS
++#include <unistd.h>
++#include <fcntl.h>
++#endif
++
+ #if defined(UL_BSD)
+ #include <sys/param.h>
+ #define  UL_GLX     1
+@@ -692,6 +701,23 @@ public:
+   }
+ } ;
+ 
++#elif defined (UL_RISCOS)
++
++/*
++  RISC OS: UnixLib has no dynamic loading, and the RISC OS port links
++  everything statically.
++*/
++
++class ulDynamicLibrary
++{
++public:
++  ulDynamicLibrary ( const char * )
++  {
++    ulSetError ( UL_WARNING, "ulDynamicLibrary unsupported on RISC OS" ) ;
++  }
++  void *getFuncAddress ( const char * ) { return NULL ; }
++} ;
++
+ #  else
+ 
+ /*

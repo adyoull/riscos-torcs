@@ -1,0 +1,253 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Mon, 5 Oct 2026 09:26:16 +0100
+Subject: [PATCH] RISC OS: static cross build
+
+Make-config.riscos and config.h.riscos replace configure for the cross
+build (build/build-torcs.sh copies them). With RISCOS_STATIC set,
+Make-default.mk makes each "shared" library a static archive and each
+module (graphics, physics, track loader, robots) one partly-linked
+object (ld -r --force-group-allocation) in which objcopy leaves only
+<name> and <name>Shut global, so robots that reuse each other's global
+names can all be linked into one program. The program itself is linked
+by build-torcs.sh. src/tools (host programs) isn't built.
+---
+ Make-config.riscos | 62 ++++++++++++++++++++++++++++++++++++++++++++++
+ Make-default.mk    | 40 ++++++++++++++++++++++++++++++
+ config.h.riscos    | 33 ++++++++++++++++++++++++
+ src/Makefile       |  7 ++++++
+ src/linux/Makefile |  4 +++
+ 5 files changed, 146 insertions(+)
+ create mode 100644 Make-config.riscos
+ create mode 100644 config.h.riscos
+
+diff --git a/Make-config.riscos b/Make-config.riscos
+new file mode 100644
+index 0000000..f736f3b
+--- /dev/null
++++ b/Make-config.riscos
+@@ -0,0 +1,62 @@
++##############################################################################
++#
++#    Make-config for the RISC OS cross build (riscos-torcs).
++#    build/build-torcs.sh copies this to Make-config instead of running
++#    configure. It reads from the environment (build/env.sh):
++#      RISCOS_CFLAGS, RISCOS_MAP, RISCOS_DEVKIT, STAGE
++#    RISCOS_STATIC makes Make-default.mk build static archives and
++#    partly-linked module objects instead of shared objects.
++#
++##############################################################################
++
++SHELL = /bin/bash
++
++srcdir = .
++top_srcdir = ${TORCS_BASE}
++VPATH = .
++prefix = /riscos
++exec_prefix = ${prefix}
++
++bindir = ${prefix}/bin
++libdir = ${prefix}/lib/torcs
++datarootdir = ${prefix}/share
++datadir = ${prefix}/share/games/torcs
++vardir = ${prefix}/var/games/torcs
++
++top_builddir = .
++
++RISCOS_STATIC = 1
++
++CC = arm-riscos-gnueabihf-gcc
++CXX = arm-riscos-gnueabihf-g++
++LD = arm-riscos-gnueabihf-ld
++AR = arm-riscos-gnueabihf-ar
++OBJCOPY = arm-riscos-gnueabihf-objcopy
++ARFLAGS = ruv
++RANLIB = arm-riscos-gnueabihf-ranlib
++
++INSTALL = /usr/bin/install -c
++INSTALL_PROGRAM = ${INSTALL}
++INSTALL_DATA = ${INSTALL} -m 644
++INSTALL_SCRIPT = ${INSTALL}
++mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
++
++# -D_GNU_SOURCE: UnixLib only declares GNU extras (sincos, strndup...)
++# when asked; Linux builds get them by default.
++CFLAGSD = -D_GNU_SOURCE -DHAVE_CONFIG_H
++RISCOS_INC = -I${STAGE}/include -I${RISCOS_DEVKIT}/include
++CXXFLAGS = ${RISCOS_CFLAGS} ${RISCOS_MAP} -Wno-write-strings ${RISCOS_INC} ${CFLAGSD}
++CFLAGS   = ${RISCOS_CFLAGS} ${RISCOS_MAP} ${RISCOS_INC} ${CFLAGSD}
++
++EXT_LIBS =
++LDFLAGS = -L${EXPORTBASE}/lib -L${STAGE}/lib -L${RISCOS_DEVKIT}/lib
++
++INCFLAGS = -I${EXPORTBASE}/include -I${TORCS_BASE}
++
++CPP = arm-riscos-gnueabihf-gcc -E ${RISCOS_INC} -M -D__DEPEND__
++
++PACKAGE = torcs
++VERSION = 1.3.7
++
++TAR = tar
++GZIP_ENV = --best
+diff --git a/Make-default.mk b/Make-default.mk
+index c295181..8ebf007 100644
+--- a/Make-default.mk
++++ b/Make-default.mk
+@@ -401,9 +401,19 @@ endif
+ 
+ ifdef PROGRAM
+ 
++ifdef RISCOS_STATIC
++# RISC OS: the program is linked by build/build-torcs.sh, after every
++# library and module (which are built after src/linux) exists.
++${PROGRAM}: ${OBJECTS}
++	@echo " RISC OS: ${PROGRAM} is linked by build/build-torcs.sh"
++else
+ ${PROGRAM}: ${OBJECTS} $(subst -l,${EXPORTBASE}/lib/lib, ${LIBS:=.a})
+ 	${CXX} ${OBJECTS} ${LDFLAGS} ${LIBS} ${SOLIBS} ${EXT_LIBS} -o $@
++endif
+ 
++ifdef RISCOS_STATIC
++installprogram: ;
++else
+ installprogram: ${PROGRAM}
+ 	@ createdir="${INSTLIBBASE}" ; \
+ 	$(mkinstalldirs) $$createdir ; \
+@@ -411,6 +421,7 @@ installprogram: ${PROGRAM}
+ 	echo " $(INSTALL_PROGRAM) $$X $$createdir/$$X"; \
+ 	$(INSTALL_PROGRAM) $$X $$createdir/$$X
+ 
++endif
+ else
+ 
+ installprogram: ;
+@@ -477,6 +488,19 @@ endif
+ 
+ ifdef SOLIBRARY
+ 
++ifdef RISCOS_STATIC
++# RISC OS has no shared objects (UnixLib has no dlopen): each "shared"
++# library is a static archive, exported as lib<name>.a.
++${SOLIBRARY}: ${OBJECTS}
++	rm -f ${SOLIBRARY}
++	${AR} rcs ${SOLIBRARY} ${OBJECTS}
++	@D=`pwd` ; \
++	createdir="${EXPORTBASE}/lib" ; \
++	$(mkinstalldirs) $$createdir ; \
++	X="${SOLIBRARY}" ; \
++	echo " Exporting $$X to $$createdir/$${X%.so}.a"; \
++	ln -sf $$D/$$X $$createdir/$${X%.so}.a
++else
+ ${SOLIBRARY}: ${OBJECTS}
+ 	${CXX} -shared -o ${SOLIBRARY} ${OBJECTS} ${SOLIBS} ${LDFLAGS} ${LIBSPATH} ${LIBS} ${DEBUG_LIBS}
+ 	@D=`pwd` ; \
+@@ -485,6 +509,7 @@ ${SOLIBRARY}: ${OBJECTS}
+ 	X="${SOLIBRARY}" ; \
+ 	echo " Exporting $$X to $$createdir/$$X"; \
+ 	ln -sf $$D/$$X $$createdir/$$X
++endif
+ 
+ 
+ installsolibrary: ${SOLIBRARY}
+@@ -508,8 +533,23 @@ endif
+ 
+ ifdef MODULE
+ 
++ifdef RISCOS_STATIC
++# RISC OS: a module (graphics, physics, track loader, robot) becomes one
++# partly-linked object in which only its entry points stay global: <name>
++# and <name>Shut. The robots were written as separate shared objects and
++# reuse each other's global names; this keeps them apart when they are all
++# linked into one program. --force-group-allocation resolves the C++ COMDAT
++# groups here, so each module keeps its own copies of inline functions.
++# riscosspec.cpp finds the entry points in the table build-torcs.sh makes.
++MODNAME = $(basename ${MODULE})
++${MODULE}: ${OBJECTS}
++	${LD} -r --force-group-allocation -o ${MODNAME}.ro ${OBJECTS}
++	${OBJCOPY} --keep-global-symbol=${MODNAME} --keep-global-symbol=${MODNAME}Shut ${MODNAME}.ro ${MODULE}
++	rm -f ${MODNAME}.ro
++else
+ ${MODULE}: ${OBJECTS}
+ 	${CXX} -shared -o ${MODULE} ${OBJECTS} ${LDFLAGS} ${LIBSPATH} ${LIBS} 
++endif
+ 	@D=`pwd` ; \
+ 	createdir="${EXPORTBASE}/${MODULEDIR}" ; \
+ 	$(mkinstalldirs) $$createdir ; \
+diff --git a/config.h.riscos b/config.h.riscos
+new file mode 100644
+index 0000000..a9d9039
+--- /dev/null
++++ b/config.h.riscos
+@@ -0,0 +1,33 @@
++/* config.h for the RISC OS cross build (riscos-torcs): build/build-torcs.sh
++   copies this to config.h instead of running configure. */
++#define HAVE_INTTYPES_H 1
++#define HAVE_LIBGL 1
++#define HAVE_LIBGLU 1
++#define HAVE_LIBGLUT 1
++#define HAVE_LIBM 1
++#define HAVE_LIBPLIBJS 1
++#define HAVE_LIBPLIBSG 1
++#define HAVE_LIBPLIBSSG 1
++#define HAVE_LIBPLIBSSGAUX 1
++#define HAVE_LIBPLIBUL 1
++#define HAVE_LIBPNG 1
++#define HAVE_LIBZ 1
++#define HAVE_MEMORY_H 1
++#define HAVE_STDINT_H 1
++#define HAVE_STDLIB_H 1
++#define HAVE_STRINGS_H 1
++#define HAVE_STRING_H 1
++#define HAVE_STRNDUP 1
++#define HAVE_SYS_STAT_H 1
++#define HAVE_SYS_TYPES_H 1
++#define HAVE_UNISTD_H 1
++#define PACKAGE "torcs"
++#define PACKAGE_BUGREPORT ""
++#define PACKAGE_NAME "torcs"
++#define PACKAGE_STRING "torcs 1.3.7"
++#define PACKAGE_TARNAME "torcs"
++#define PACKAGE_URL ""
++#define PACKAGE_VERSION "1.3.7"
++#define STDC_HEADERS 1
++#define TIME_WITH_SYS_TIME 1
++#define VERSION "1.3.7"
+diff --git a/src/Makefile b/src/Makefile
+index 140440c..25e00bc 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -23,9 +23,16 @@ SHIPSUBDIRS	= drivers modules libs raceman
+ 
+ EXPINCDIRS	= interfaces libs linux modules
+ 
++ifdef RISCOS_STATIC
++# RISC OS: the tools (trackgen, accc...) are host programs; not built.
++TOOLSUBDIRS	= libs linux
++
++SUBDIRS		= libs linux modules drivers
++else
+ TOOLSUBDIRS	= libs tools linux
+ 
+ SUBDIRS		= libs linux modules drivers tools
++endif
+ 
+ SRCDOC		= yes
+ 
+diff --git a/src/linux/Makefile b/src/linux/Makefile
+index 6bb4ebd..402c3d7 100644
+--- a/src/linux/Makefile
++++ b/src/linux/Makefile
+@@ -21,9 +21,13 @@ TOOLSCRIPT  = torcs
+ 
+ PROGRAM = torcs-bin
+ 
++ifdef RISCOS_STATIC
++SOURCES = main.cpp riscosspec.cpp riscosplatform.cpp
++else
+ SOURCES = main.cpp linuxspec.cpp
+ 
+ LDFLAGS = -rdynamic
++endif
+ 
+ SOLIBS  =  -lracescreens  \
+ 	   -lrobottools   \
