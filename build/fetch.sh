@@ -36,7 +36,7 @@ if [ ! -d "$TORCS_SRC" ]; then
   git tag upstream
   while read -r p; do
     [ -n "$p" ] || continue
-    git -c user.name="Andrew Youll" -c user.email=andrewyoull86@gmail.com am -q --committer-date-is-author-date "$RT_DIR/patches/torcs/$p"
+    git -c user.name="Andrew Youll" -c user.email=andrewyoull86@gmail.com am -q --keep-cr --committer-date-is-author-date "$RT_DIR/patches/torcs/$p"
     echo "  applied $p"
   done < "$RT_DIR/patches/torcs/series"
 fi
