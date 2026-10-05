@@ -7,7 +7,8 @@ Everything is cross-built on Linux (x86-64; Ubuntu 24.04 tested).
 - The **riscos-crossdev toolchain 1.3** (GCCSDK GCC 10.2, UnixLib 5.0.3.2,
   static only, `elf2aif`, `qemu-arm-aligntrap`), unpacked anywhere:
   `riscos-crossdev-toolchain-1.3-x86_64-linux.tar.xz`.
-- The **riscos-mesa devkit** 12f or later (OSMesa, EGL, GLU, freeglut with the
+- The **riscos-mesa devkit** 12h or later (12h: GLUT game mode draws at the
+  requested size and stretches it, which TORCS's full screen relies on; OSMesa, EGL, GLU, freeglut with the
   RISC OS back end, OpenAL, SDL 2, zlib, PThreadTicker).
 - Host packages: `build-essential python3 python3-pil curl git`.
 - For the tests: `g++-arm-linux-gnueabihf` (QEMU test); for profiling, see
@@ -15,7 +16,7 @@ Everything is cross-built on Linux (x86-64; Ubuntu 24.04 tested).
 
 ```sh
 export RISCOS_TOOLCHAIN=/opt/rcd/riscos-crossdev-toolchain-1.3-x86_64-linux
-export RISCOS_DEVKIT=/opt/devkit/riscos-mesa-devkit-12f
+export RISCOS_DEVKIT=/opt/devkit/riscos-mesa-devkit-12h
 build/fetch.sh            # sources from archive.ubuntu.com, checked, TORCS patched
 build/build-deps.sh       # libpng, ogg, vorbis, freealut, plib -> work/stage
 build/build-torcs.sh      # TORCS -> work/torcs/src/linux/torcs (ELF)

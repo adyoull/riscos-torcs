@@ -1,5 +1,17 @@
 # Changelog
 
+## m2-2 (2026-10-05)
+
+- Pi test of m2-1: full screen showed the picture small in the middle of
+  the screen, and switching to window mode didn't stick.
+- Linked with riscos-mesa devkit 12h, whose GLUT game mode draws at the
+  size asked for and stretches it over the screen (12f's drew at the
+  desktop size, so TORCS's view sat in the middle). 12h also has faster
+  clears, 2D textures, colour material and fog.
+- Settings: replaced only when the application's version changes (a Version
+  file), not by comparing file dates, which a Pi with a wrong clock got
+  wrong at every start.
+
 ## m2-1 (2026-10-05): speed
 
 - Pi result of m1-1: runs; 4.8 fps in a 640x480 window.

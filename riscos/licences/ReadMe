@@ -20,7 +20,7 @@ libpng 1.6.37                                      libpng licence:
     libpng-LICENSE.
 libogg 1.3.5, libvorbis 1.3.7                      BSD licences:
     libogg-COPYING, libvorbis-COPYING.
-riscos-mesa devkit 12f: Mesa (OSMesa), riscos-mesa's EGL, GLU,
+riscos-mesa devkit 12h: Mesa (OSMesa), riscos-mesa's EGL, GLU,
     freeglut, SDL 2, OpenAL Soft, zlib, UnixLib (the C library) and
     the PThreadTicker module: riscos-mesa-devkit-LICENCES (and
     PThreadTicker-Licence in the application).

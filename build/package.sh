@@ -39,6 +39,10 @@ mkdir -p "$APP/results"
 # --- RISC OS default settings (riscos/defaults.py says what and why) ---
 python3 "$RT_DIR/riscos/defaults.py" "$APP"
 
+# The version: the program compares it with the one in the settings
+# directory to tell a new version (riscosplatform.cpp).
+echo "$VERSION" > "$APP/Version"
+
 # --- licences ---
 L="$APP/Licences"; mkdir -p "$L"
 cp "$TORCS_SRC/COPYING" "$L/COPYING"

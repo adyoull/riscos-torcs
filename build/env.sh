@@ -1,7 +1,7 @@
 # Source this: . build/env.sh
 # Settings for the riscos-torcs build scripts. Each can be set first.
 #   RISCOS_TOOLCHAIN  riscos-crossdev toolchain 1.3 (UnixLib 5.0.3.2, static)
-#   RISCOS_DEVKIT     riscos-mesa devkit (12f or later: OpenAL, freeglut, EGL)
+#   RISCOS_DEVKIT     riscos-mesa devkit (12h or later: OpenAL, freeglut, EGL)
 #   WORK              where sources, the staged libraries and the build go
 #   DL                where the source tarballs are (fetched if missing)
 RT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)

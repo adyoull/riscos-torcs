@@ -18,16 +18,23 @@ filling pixels, so:
   the sky is the track's background colour.
 - guifont.cpp: font textures RGBA in GL_CLAMP_TO_EDGE on software OpenGL
   (luminance-alpha in GL_CLAMP took Mesa's general path).
+- riscosplatform.cpp: the settings files are replaced when the
+  application's version (its Version file) differs from the one recorded
+  in the settings (riscos-version), instead of when the application's copy
+  is newer: a Pi without a working clock can start with a date earlier
+  than the zip's files, and the settings saved in the game then looked
+  older and were replaced at every start (Pi test of m2-1: switching to
+  window mode didn't stick).
 ---
- src/interfaces/graphic.h                  |  3 ++
- src/libs/confscreens/graphconfig.cpp      | 47 ++++++++++++++++++++
- src/libs/tgfclient/guifont.cpp            | 29 +++++++++++++
- src/libs/tgfclient/screen.cpp             |  6 ++-
- src/linux/riscosplatform.cpp              | 53 +++++++++++++++++++++++
- src/modules/graphic/ssggraph/grmain.cpp   |  8 ++++
- src/modules/graphic/ssggraph/grmain.h     |  1 +
- src/modules/graphic/ssggraph/grscreen.cpp |  4 +-
- 8 files changed, 149 insertions(+), 2 deletions(-)
+ src/interfaces/graphic.h                  |   3 +
+ src/libs/confscreens/graphconfig.cpp      |  47 ++++++++++
+ src/libs/tgfclient/guifont.cpp            |  29 ++++++
+ src/libs/tgfclient/screen.cpp             |   6 +-
+ src/linux/riscosplatform.cpp              | 103 +++++++++++++++++++++-
+ src/modules/graphic/ssggraph/grmain.cpp   |   8 ++
+ src/modules/graphic/ssggraph/grmain.h     |   1 +
+ src/modules/graphic/ssggraph/grscreen.cpp |   4 +-
+ 8 files changed, 195 insertions(+), 6 deletions(-)
 
 diff --git a/src/interfaces/graphic.h b/src/interfaces/graphic.h
 index 9ff01ff..08ec640 100644
@@ -190,15 +197,27 @@ index 53d966c..ea8cf7e 100644
  #else // USE_RANDR_EXT
  static char	*Res[] = {"640x480", "800x600", "1024x768", "1152x768", "1152x864", "1200x854", "1200x960", "1280x720", "1280x1024", "1400x900", "1600x900", "1600x1200", "1680x1050", "1920x1200", "320x200"};
 diff --git a/src/linux/riscosplatform.cpp b/src/linux/riscosplatform.cpp
-index 6e5c828..20e4dcb 100644
+index 6e5c828..b01a1cf 100644
 --- a/src/linux/riscosplatform.cpp
 +++ b/src/linux/riscosplatform.cpp
-@@ -161,6 +161,54 @@ static const char *const configFiles[] = {
+@@ -140,9 +140,7 @@ copyFile(const char *from, const char *to)
+ }
+ 
+ /* The settings files the Linux launcher copies into ~/.torcs
+-   (setup_linux.sh, made from the CONFIG lists in the Makefiles). They are
+-   copied when missing; a newer copy in the game (a new version) replaces
+-   the old one, which is kept as <file>.old, as on Linux. */
++   (setup_linux.sh, made from the CONFIG lists in the Makefiles). */
+ static const char *const configFiles[] = {
+ 	"config/raceengine.xml",
+ 	"config/style.xsl",
+@@ -161,12 +159,93 @@ static const char *const configFiles[] = {
  	NULL
  };
  
 +#ifdef __riscos__
-+/* The first run's screen settings (screen.xml was just copied): full
++/* The first run's screen settings (screen.xml was just copied, on the
++   first run or the first run of a new version): full
 +   screen, drawn at a reduced size and stretched over the screen.
 +   riscos-mesa's freeglut does this for GLUT's game mode, which TORCS uses
 +   for full screen: the picture is drawn at the size TORCS asks for (the
@@ -245,10 +264,57 @@ index 6e5c828..20e4dcb 100644
 +}
 +#endif
 +
++/* Read the first line of a small file into buf ("" if there's none). */
++static void
++readLine(const char *path, char *buf, size_t size)
++{
++	buf[0] = 0;
++	FILE *f = fopen(path, "r");
++	if (f == NULL) {
++		return;
++	}
++	if (fgets(buf, (int)size, f) == NULL) {
++		buf[0] = 0;
++	}
++	fclose(f);
++	buf[strcspn(buf, "\r\n")] = 0;
++}
++
++/* Copy the settings files into the settings directory. A file that's
++   missing is copied. When the application is a different version from the
++   one that last set the directory up (the file Version in the application,
++   written by package.sh, against riscos-version in the settings), all of
++   them are replaced, the old ones kept as <file>.old, as the Linux launcher
++   does when the game's copies are newer. Versions are compared rather than
++   file dates: a Pi without a network or clock battery can start with a
++   date earlier than the files in the zip, and the settings saved in the
++   game would then always look older and be replaced at every start. */
  static void
  setupLocalDir(void)
  {
-@@ -191,6 +239,11 @@ setupLocalDir(void)
+ 	char from[1024], to[1024], old[1024];
++	char appVersion[64], localVersion[64];
+ 	struct stat sf, st;
+ 
++	snprintf(from, sizeof(from), "%sVersion", GetDataDir());
++	readLine(from, appVersion, sizeof(appVersion));
++	snprintf(to, sizeof(to), "%sriscos-version", GetLocalDir());
++	readLine(to, localVersion, sizeof(localVersion));
++	bool update = strcmp(appVersion, localVersion) != 0;
++
+ 	for (int i = 0; configFiles[i] != NULL; i++) {
+ 		snprintf(from, sizeof(from), "%s%s", GetDataDir(), configFiles[i]);
+ 		snprintf(to, sizeof(to), "%s%s", GetLocalDir(), configFiles[i]);
+@@ -174,7 +253,7 @@ setupLocalDir(void)
+ 			continue;
+ 		}
+ 		if (stat(to, &st) == 0) {
+-			if (sf.st_mtime <= st.st_mtime) {
++			if (!update) {
+ 				continue;
+ 			}
+ 			snprintf(old, sizeof(old), "%s.old", to);
+@@ -191,6 +270,22 @@ setupLocalDir(void)
  			}
  		}
  		copyFile(from, to);
@@ -257,6 +323,17 @@ index 6e5c828..20e4dcb 100644
 +			riscosScreenDefaults(to);
 +		}
 +#endif
++	}
++
++	if (update) {
++		snprintf(to, sizeof(to), "%sriscos-version", GetLocalDir());
++		FILE *f = fopen(to, "w");
++		if (f != NULL) {
++			fprintf(f, "%s\n", appVersion);
++			fclose(f);
++		}
++		printf("RISC OS setup: settings set up for version %s (were %s)\n",
++		       appVersion[0] ? appVersion : "?", localVersion[0] ? localVersion : "none");
  	}
  }
  
