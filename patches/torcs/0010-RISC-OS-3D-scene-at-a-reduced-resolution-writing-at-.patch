@@ -1,0 +1,258 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Mon, 5 Oct 2026 19:48:50 +0100
+Subject: [PATCH] RISC OS: 3D scene at a reduced resolution, writing at full
+ size
+
+Pi test of m2-3: the writing was sharp at 960x540 but only 5 fps. On
+software OpenGL (RISC OS, or TORCS_SOFTWARE_GL), Graphic Configuration
+has "Scene resolution (%)" (graph.xml "scene scale", a fraction;
+default 100%). Below 100%, cGrScreen::update draws the 3D scene in the
+bottom-left part of the screen's viewport (viewport and scissor scaled,
+so the clears cover only that part too), copies it into a texture and
+draws it over the whole viewport as one textured quad (one RGBA
+power-of-two texture, GL_CLAMP_TO_EDGE, GL_LINEAR, GL_REPLACE: Mesa's
+fast textured-triangle path), then the mirror and the race display at the
+full size. At 50% the scene has a quarter of the pixels. refresh()
+leaves the full-screen clear to each screen when the scene is reduced.
+Host (xlib swrast, 960x540, alone on forza): 17.6 fps at 100%, 26.7 at
+50%.
+---
+ src/interfaces/graphic.h                  |  1 +
+ src/libs/confscreens/graphconfig.cpp      | 29 ++++++++
+ src/modules/graphic/ssggraph/grmain.cpp   | 12 +++
+ src/modules/graphic/ssggraph/grmain.h     |  1 +
+ src/modules/graphic/ssggraph/grscreen.cpp | 90 +++++++++++++++++++++++
+ 5 files changed, 133 insertions(+)
+
+diff --git a/src/interfaces/graphic.h b/src/interfaces/graphic.h
+index 08ec640..8582e16 100644
+--- a/src/interfaces/graphic.h
++++ b/src/interfaces/graphic.h
+@@ -55,6 +55,7 @@
+ #define GR_ATT_TEXTURECOMPRESSION_DISABLED	"disabled"
+ 
+ #define GR_ATT_WHEELRENDERING				"wheel rendering"
++#define GR_ATT_SCENESCALE				"scene scale"
+ #define GR_ATT_BACKGROUND				"sky background"
+ #define GR_ATT_BACKGROUND_YES				"yes"
+ #define GR_ATT_BACKGROUND_NO				"no"
+diff --git a/src/libs/confscreens/graphconfig.cpp b/src/libs/confscreens/graphconfig.cpp
+index 6e6dd8a..e834b68 100644
+--- a/src/libs/confscreens/graphconfig.cpp
++++ b/src/libs/confscreens/graphconfig.cpp
+@@ -39,6 +39,10 @@ static int	SmokeValue = 300;
+ static int	SkidEditId;
+ static int	SkidValue = 20;
+ static int	LodFactorEditId;
++// The 3D scene's drawing size, % of the screen (software OpenGL; the race
++// display and menus stay at the full size).
++static int	SceneScaleEditId;
++static int	SceneScaleValue = 100;
+ static tdble	LodFactorValue = 1.0;
+ 
+ // Wheel detail.
+@@ -85,6 +89,7 @@ static void SaveGraphicOptions(void *prevMenu)
+ 	GfParmSetNum(grHandle, GR_SCT_GRAPHIC, GR_ATT_SMOKENB, NULL, SmokeValue);
+ 	GfParmSetNum(grHandle, GR_SCT_GRAPHIC, GR_ATT_MAXSTRIPBYWHEEL, NULL, SkidValue);
+ 	GfParmSetNum(grHandle, GR_SCT_GRAPHIC, GR_ATT_LODFACTOR, NULL, LodFactorValue);	
++	GfParmSetNum(grHandle, GR_SCT_GRAPHIC, GR_ATT_SCENESCALE, "%", SceneScaleValue);
+ 	GfParmSetStr(grHandle, GR_SCT_GRAPHIC, GR_ATT_WHEELRENDERING, wheelDetailOptionList[curOptionWheelDetail]);	
+ 	GfParmSetStr(grHandle, GR_SCT_GRAPHIC, GR_ATT_BACKGROUND, backgroundOptionList[curOptionBackground]);
+ 	
+@@ -111,6 +116,23 @@ static void ChangeFov(void * /* dummy */)
+ 
+ 
+ 
++static void ChangeSceneScale(void * /* dummy */)
++{
++	char *val;
++	const int BUFSIZE = 1024;
++	char buf[BUFSIZE];
++
++	val = GfuiEditboxGetString(scrHandle, SceneScaleEditId);
++	SceneScaleValue = strtol(val, (char **)NULL, 0);
++	if (SceneScaleValue < 25) {
++		SceneScaleValue = 25;
++	} else if (SceneScaleValue > 100) {
++		SceneScaleValue = 100;
++	}
++	snprintf(buf, BUFSIZE, "%d", SceneScaleValue);
++	GfuiEditboxSetString(scrHandle, SceneScaleEditId, buf);
++}
++
+ static void ChangeLodFactor(void * /* dummy */)
+ {
+ 	char *val;
+@@ -236,6 +258,13 @@ void *GraphMenuInit(void *prevMenu)
+ 					x2+10, y, width-20, 16, NULL, (tfuiCallback)NULL, ChangeLodFactor);
+ 	
+ 					
++	y -= dy;
++	GfuiLabelCreate(scrHandle, "Scene resolution (%):", GFUI_FONT_MEDIUM, x, y, GFUI_ALIGN_HL_VB, 0);
++	SceneScaleValue = (int)GfParmGetNum(grHandle, GR_SCT_GRAPHIC, GR_ATT_SCENESCALE, "%", 100.0);
++	snprintf(buf, BUFSIZE, "%d", SceneScaleValue);
++	SceneScaleEditId = GfuiEditboxCreate(scrHandle, buf, GFUI_FONT_MEDIUM_C,
++					x2+10, y, width-20, 16, NULL, (tfuiCallback)NULL, ChangeSceneScale);
++
+ 	// Wheel detail option
+ 	y -= dy;
+ 	GfuiLabelCreate(scrHandle, "Wheel rendering:", GFUI_FONT_MEDIUM, x, y, GFUI_ALIGN_HL_VB, 0);
+diff --git a/src/modules/graphic/ssggraph/grmain.cpp b/src/modules/graphic/ssggraph/grmain.cpp
+index d8b4035..abff038 100644
+--- a/src/modules/graphic/ssggraph/grmain.cpp
++++ b/src/modules/graphic/ssggraph/grmain.cpp
+@@ -70,6 +70,7 @@ int grNbScreen = 1;
+ tdble grLodFactorValue = 1.0;
+ EWheelDetail grUseDetailedWheels = DETAILED;
+ int grDrawSkyBackground = 1;	// the panorama around the track (else the sky colour)
++int grSceneScale = 100;		// % of the screen size the 3D scene is drawn at
+ 
+ #ifdef WIN32
+ #include <GL/glext.h>
+@@ -300,6 +301,12 @@ initView(int x, int y, int width, int height, int /* flag */, void *screen)
+ 		grUseDetailedWheels = SIMPLE;	
+ 	}
+ 
++	grSceneScale = (int)GfParmGetNum(grHandle, GR_SCT_GRAPHIC, GR_ATT_SCENESCALE, "%", 100.0);
++	if (grSceneScale < 25) {
++		grSceneScale = 25;
++	} else if (grSceneScale > 100) {
++		grSceneScale = 100;
++	}
+ 	grDrawSkyBackground = strcmp(GfParmGetStr(grHandle, GR_SCT_GRAPHIC, GR_ATT_BACKGROUND, GR_ATT_BACKGROUND_YES), GR_ATT_BACKGROUND_NO) != 0;
+ 
+ 	GfParmReleaseHandle(grHandle);
+@@ -338,6 +345,11 @@ refresh(tSituation *s)
+ 	// colour (other code, the track map, changes the clear colour).
+ 	glClearColor(grTrack->graphic.bgColor[0], grTrack->graphic.bgColor[1], grTrack->graphic.bgColor[2], 1.0);
+     }
++#if defined(__riscos__) || defined(TORCS_SOFTWARE_GL)
++    // With a reduced scene, each screen clears only its scene's part
++    // (cGrScreen::update): the stretched scene covers the rest.
++    if (grSceneScale >= 100)
++#endif
+     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+     STOP_PROFILE("grDrawBackground/glClear");
+ 
+diff --git a/src/modules/graphic/ssggraph/grmain.h b/src/modules/graphic/ssggraph/grmain.h
+index dd0d330..723ebcd 100644
+--- a/src/modules/graphic/ssggraph/grmain.h
++++ b/src/modules/graphic/ssggraph/grmain.h
+@@ -77,6 +77,7 @@ extern double grDeltaTime;
+ enum EWheelDetail { DETAILED, SIMPLE };
+ extern EWheelDetail grUseDetailedWheels;
+ extern int grDrawSkyBackground;
++extern int grSceneScale;
+ 
+ inline float urandom() {
+ 	return (((float)rand()/(1.0+(float)RAND_MAX)));
+diff --git a/src/modules/graphic/ssggraph/grscreen.cpp b/src/modules/graphic/ssggraph/grscreen.cpp
+index d6d459e..e0660d1 100644
+--- a/src/modules/graphic/ssggraph/grscreen.cpp
++++ b/src/modules/graphic/ssggraph/grscreen.cpp
+@@ -302,6 +302,78 @@ void cGrScreen::camDraw(tSituation *s)
+ 
+ 
+ /* Update screen display */
++#if defined(__riscos__) || defined(TORCS_SOFTWARE_GL)
++/* Software OpenGL: the 3D scene can be drawn smaller than the screen
++   (Graphic Configuration, "Scene resolution", grSceneScale %) and stretched
++   to it, while the race display and the menus are drawn at the full size,
++   so the writing stays sharp. Drawing time is mostly per pixel: a scene at
++   50% has a quarter of the pixels. The scene is drawn in the bottom-left
++   corner of the screen's viewport, copied into a texture and drawn over the
++   whole viewport as one textured quad (Mesa's fast textured-triangle path:
++   one RGBA texture, power-of-two, GL_CLAMP_TO_EDGE, GL_REPLACE, no fog or
++   depth test). */
++static GLuint grSceneTex = 0;
++static int grSceneTexW = 0, grSceneTexH = 0;
++
++static int grPow2(int n)
++{
++	int p = 1;
++	while (p < n) {
++		p <<= 1;
++	}
++	return p;
++}
++
++static void grSceneStretch(int x, int y, int w, int h, int sw, int sh)
++{
++	// One more row and column than drawn, where there is one, so the
++	// bilinear filter at the right and top edges doesn't read junk.
++	int cw = (sw < w) ? sw + 1 : sw;
++	int ch = (sh < h) ? sh + 1 : sh;
++	int tw = grPow2(cw), th = grPow2(ch);
++
++	if (grSceneTex == 0) {
++		glGenTextures(1, &grSceneTex);
++	}
++	glBindTexture(GL_TEXTURE_2D, grSceneTex);
++	if (tw != grSceneTexW || th != grSceneTexH) {
++		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
++		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++		grSceneTexW = tw;
++		grSceneTexH = th;
++	}
++	glReadBuffer(GL_BACK);
++	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, x, y, cw, ch);
++
++	glViewport(x, y, w, h);
++	glMatrixMode(GL_PROJECTION);
++	glLoadIdentity();
++	glOrtho(0.0, 1.0, 0.0, 1.0, -1.0, 1.0);
++	glMatrixMode(GL_MODELVIEW);
++	glLoadIdentity();
++	glDisable(GL_DEPTH_TEST);
++	glDisable(GL_FOG);
++	glDisable(GL_LIGHTING);
++	glDisable(GL_BLEND);
++	glDisable(GL_ALPHA_TEST);
++	glDisable(GL_CULL_FACE);
++	glDisable(GL_COLOR_MATERIAL);
++	glEnable(GL_TEXTURE_2D);
++	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
++	float u = (float)sw / tw, v = (float)sh / th;
++	glBegin(GL_TRIANGLE_STRIP);
++	glTexCoord2f(0.0, 0.0); glVertex2f(0.0, 0.0);
++	glTexCoord2f(u, 0.0);   glVertex2f(1.0, 0.0);
++	glTexCoord2f(0.0, v);   glVertex2f(0.0, 1.0);
++	glTexCoord2f(u, v);     glVertex2f(1.0, 1.0);
++	glEnd();
++	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
++}
++#endif
++
+ void cGrScreen::update(tSituation *s, float Fps)
+ {
+ 	int i;
+@@ -359,7 +431,25 @@ void cGrScreen::update(tSituation *s, float Fps)
+ 	
+ 	glViewport(scrx, scry, scrw, scrh);
+ 	dispCam = curCam;
++#if defined(__riscos__) || defined(TORCS_SOFTWARE_GL)
++	if (grSceneScale < 100) {
++		int sw = (scrw * grSceneScale + 50) / 100;
++		int sh = (scrh * grSceneScale + 50) / 100;
++		glViewport(scrx, scry, sw, sh);
++		// The clears (here, and the depth clear after the sky) cover only the
++		// scene's part.
++		glEnable(GL_SCISSOR_TEST);
++		glScissor(scrx, scry, sw, sh);
++		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
++		camDraw(s);
++		glDisable(GL_SCISSOR_TEST);
++		grSceneStretch(scrx, scry, scrw, scrh, sw, sh);
++	} else {
++		camDraw(s);
++	}
++#else
+ 	camDraw(s);
++#endif
+ 	
+ 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+ 	glDisable(GL_CULL_FACE);

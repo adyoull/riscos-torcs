@@ -1,5 +1,12 @@
 # Changelog
 
+## m2-4 (2026-10-05)
+
+- Pi test of m2-3: sharp writing at 960x540, but 5 fps. The 3D scene is now
+  drawn at a lower resolution (Graphic Configuration, "Scene resolution",
+  default 50%: 480x270 on a 960x540 screen) and stretched, while the
+  writing, the race display and the menus stay at the full 540-line size.
+
 ## m2-3 (2026-10-05)
 
 - Pi test of m2-2: full screen fills the screen now, but the writing was

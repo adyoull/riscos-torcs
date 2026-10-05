@@ -57,9 +57,14 @@ def graph(s):
     # Textures at most 512x512 (Options > OpenGL): software OpenGL keeps
     # every texture in RAM and many track textures are 1024x1024; smaller
     # ones also draw faster (fewer cache misses). 
+    # The 3D scene drawn at half the screen size (a quarter of the pixels)
+    # and stretched, with the race display and menus at the full size
+    # (Graphic Configuration, "Scene resolution": stored as a fraction).
     s = s.replace('<attstr name="wheel rendering" val="simple"/>',
                   '<attstr name="wheel rendering" val="simple"/>\n'
-                  '    <attstr name="sky background" val="no"/>', 1)
+                  '    <attstr name="sky background" val="no"/>\n'
+                  '    <attnum name="scene scale" val="0.5"/>', 1)
+    assert 'scene scale' in s
     assert 'sky background' in s
     assert 'OpenGL Features' not in s
     s = s.replace('</params>', '  <section name="OpenGL Features">\n'

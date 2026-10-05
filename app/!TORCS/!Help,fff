@@ -51,9 +51,15 @@ Options
     16:10  576x360  768x480  864x540  1152x720
     16:9   640x360  856x480  960x540  1280x720
   TORCS saves the setting and quits; start it again to use it.
-- Options > Graphic Configuration: visibility, smoke, skid marks, wheels
-  and the sky background (the panorama around the track; off by default:
-  it costs a fifth of the drawing time).
+- Options > Graphic Configuration:
+  - Scene resolution (%): the size the 3D scene (track, cars) is drawn at,
+    as a percentage of the screen size, stretched to fill it. The writing
+    and the race display are always drawn at the full size. Default 50:
+    a quarter of the pixels. 100 is sharpest and slowest; 33-75 trade
+    sharpness for speed.
+  - Visibility, smoke, skid marks, wheels, and the sky background (the
+    panorama around the track; off by default: it costs a fifth of the
+    drawing time).
 - The !Run file has settings: a log file (TORCS$Log, on in test builds:
   <Wimp$ScrapDir>.TORCSLog), and -M for multitexturing (slower).
 - Your settings and race results are in <Choices$Write>.TORCS. Delete

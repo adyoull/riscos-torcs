@@ -41,7 +41,8 @@ m = re.search(r'<section name="%s">.*?</section>' % re.escape(sec), s, re.S)
 body = m.group(0)
 nb, n = re.subn(r'(<att(?:num|str) name="%s" val=")[^"]*"' % re.escape(att), lambda x: x.group(1) + val + '"', body)
 if n == 0:  # not there yet: add it as a string attribute
-    nb = body.replace('</section>', '  <attstr name="%s" val="%s"/>\n  </section>' % (att, val), 1)
+    kind = 'num' if re.match(r'^-?[0-9.]+$', val) else 'str'
+    nb = body.replace('</section>', '  <att%s name="%s" val="%s"/>\n  </section>' % (kind, att, val), 1)
     if nb.count('<section') > 1: sys.exit("can't add %s to %s" % (att, sec))
 open(p, 'w').write(s.replace(body, nb))
 PY
