@@ -1,7 +1,10 @@
 # Source this: . build/env.sh
 # Settings for the riscos-torcs build scripts. Each can be set first.
 #   RISCOS_TOOLCHAIN  riscos-crossdev toolchain 1.3 (UnixLib 5.0.3.2, static)
-#   RISCOS_DEVKIT     riscos-mesa devkit (20.3.5-12: OpenAL, freeglut, EGL)
+#   RISCOS_DEVKIT     riscos-mesa devkit (20.3.5-13: OpenAL, freeglut, EGL)
+#   RISCOS_UNIXLIB    optional: a directory with a newer libunixlib.a (UnixLib
+#                     5.0.3.3 from the riscos-unixlib release) linked instead
+#                     of the toolchain's; its headers are unchanged since 5.0.3.2
 #   WORK              where sources, the staged libraries and the build go
 #   DL                where the source tarballs are (fetched if missing)
 RT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -12,7 +15,10 @@ RT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 : "${RISCOS_DEVKIT:?set RISCOS_DEVKIT to the riscos-mesa devkit}"
 STAGE=$WORK/stage
 TORCS_SRC=$WORK/torcs
-export RT_DIR WORK DL JOBS RISCOS_TOOLCHAIN RISCOS_DEVKIT STAGE TORCS_SRC
+if [ -n "${RISCOS_UNIXLIB:-}" ] && [ ! -f "$RISCOS_UNIXLIB/libunixlib.a" ]; then
+  echo "RISCOS_UNIXLIB: no libunixlib.a in $RISCOS_UNIXLIB" >&2; exit 1
+fi
+export RT_DIR WORK DL JOBS RISCOS_TOOLCHAIN RISCOS_DEVKIT RISCOS_UNIXLIB STAGE TORCS_SRC
 export PATH="$RISCOS_TOOLCHAIN/bin:$PATH"
 HOST=arm-riscos-gnueabihf
 # riscos-mesa's flags (docs/porting/README.md). -fstack-clash-protection is

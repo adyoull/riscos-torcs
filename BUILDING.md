@@ -7,8 +7,14 @@ Everything is cross-built on Linux (x86-64; Ubuntu 24.04 tested).
 - The **riscos-crossdev toolchain 1.3** (GCCSDK GCC 10.2, UnixLib 5.0.3.2,
   static only, `elf2aif`, `qemu-arm-aligntrap`), unpacked anywhere:
   `riscos-crossdev-toolchain-1.3-x86_64-linux.tar.xz`.
-- The **riscos-mesa devkit 20.3.5-12** (the GitHub release v20.3.5-12,
-  `riscos-mesa-devkit-20.3.5-12.tgz`, sha256 `07f1066b81ed582bd1fbed44fa7892f3ffaf20ad2cbe4b6ab7deafb2cd5df3ea`):
+- **UnixLib 5.0.3.3** (riscos-unixlib release v5.0.3.3, `libunixlib.a`,
+  sha256 `e24f16c3f4612aae3871ceff521ab86b0d3ac4cc689d734e0e4085d02c774adf`),
+  linked instead of the toolchain's 5.0.3.2: put it in a directory and set
+  `RISCOS_UNIXLIB` to it. Its headers are the same as 5.0.3.2's. Without
+  `RISCOS_UNIXLIB` the toolchain's UnixLib is used; `build-torcs.sh` prints
+  which one it linked.
+- The **riscos-mesa devkit 20.3.5-13** (the GitHub release v20.3.5-13,
+  `riscos-mesa-devkit-20.3.5-13.tgz`, sha256 `329dc543eaea3449d5e1ed1a7b9714b6d2af85612353b92f296562ad2210317e`):
   OSMesa, EGL, GLU, freeglut with the RISC OS back end, OpenAL, SDL 2, zlib,
   PThreadTicker. Its GLUT game mode draws at the requested size and
   stretches it, which TORCS's full screen relies on.
@@ -18,7 +24,8 @@ Everything is cross-built on Linux (x86-64; Ubuntu 24.04 tested).
 
 ```sh
 export RISCOS_TOOLCHAIN=/opt/rcd/riscos-crossdev-toolchain-1.3-x86_64-linux
-export RISCOS_DEVKIT=/opt/devkit/riscos-mesa-devkit-20.3.5-12
+export RISCOS_DEVKIT=/opt/devkit/riscos-mesa-devkit-20.3.5-13
+export RISCOS_UNIXLIB=/opt/unixlib/5.0.3.3   # holds libunixlib.a
 build/fetch.sh            # sources from archive.ubuntu.com, checked, TORCS patched
 build/build-deps.sh       # libpng, ogg, vorbis, freealut, plib -> work/stage
 build/build-torcs.sh      # TORCS -> work/torcs/src/linux/torcs (ELF)

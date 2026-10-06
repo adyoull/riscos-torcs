@@ -1,5 +1,16 @@
 # Changelog
 
+## m2-6 (2026-10-06)
+
+- Linked with UnixLib 5.0.3.3 (was the toolchain's 5.0.3.2): fixes from a
+  code audit, among them threads waiting in write()/read()/stdio and the
+  /dev/dsp path. No change to PThreadTicker (0.03).
+- Linked with the released riscos-mesa devkit 20.3.5-13 (was 20.3.5-12; the
+  same speed for TORCS's drawing: 7.9 fps in the Pi A/B test).
+- Pi A/B test of riscos-mesa 20.3.5-14rc1: 10.3 fps against 7.9 with
+  20.3.5-13 (960x540 window, scene 50%); TORCS moves to 20.3.5-14 when it's
+  released.
+
 ## m2-5 (2026-10-05)
 
 - Pi test of m2-4: 7.8 fps full screen (5 in m2-3).

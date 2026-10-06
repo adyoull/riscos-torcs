@@ -52,7 +52,10 @@ MODOBJS=$(for m in $MODS; do echo "export/$m"; done)
 # The libraries, in dependency order (static archives: users first).
 TLIBS="-lracescreens -lraceengine -lclient -lconfscreens -lrobottools -llearning \
   -lmusicplayer -ltgfclient -ltgf -ltxml -lsolid"
-arm-riscos-gnueabihf-g++ -static -o src/linux/torcs \
+# RISCOS_UNIXLIB first: the driver's -lunixlib then finds that library
+# before the toolchain's.
+ULIB=${RISCOS_UNIXLIB:+-L$RISCOS_UNIXLIB}
+arm-riscos-gnueabihf-g++ -static $ULIB -o src/linux/torcs \
   src/linux/main.o src/linux/riscosspec.o src/linux/riscosplatform.o src/linux/riscos_modtab.o \
   $MODOBJS \
   -Lexport/lib -L"$STAGE/lib" -L"$RISCOS_DEVKIT/lib" \
@@ -61,5 +64,7 @@ arm-riscos-gnueabihf-g++ -static -o src/linux/torcs \
   -lglut -lGLU -lalut -lopenal -lSDL2 -lEGL -lOSMesa \
   -lvorbisfile -lvorbis -logg -lpng16 -lz -lstdc++ -lm \
   -Wl,-Map=src/linux/torcs.map
+# Which UnixLib was linked (the map names the archive of each member).
+grep -o '[^ (]*libunixlib\.a' src/linux/torcs.map | sort -u | sed 's/^/UnixLib: /'
 python3 "$RT_DIR/tools/check-stack-probes.py" src/linux/torcs
 ls -l src/linux/torcs
