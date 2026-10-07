@@ -36,8 +36,12 @@ build/package.sh 1.3.7-riscos1   # -> dist/TORCS-1.3.7-riscos1.zip
 `DL` (default `$WORK/dl`) the tarballs. A full build takes about five minutes on
 two cores.
 
-`package.sh` includes a few tracks (`TRACKS`, default a test set of nine);
-`TRACKS=all` packs all 38 (about 435 MB of data).
+`package.sh` includes a few tracks (`TRACKS`, default a set of nine);
+`TRACKS=all` packs all 38 (about 435 MB of data). `TRACKS_PACK=NAME` also
+makes `dist/NAME.zip`, the tracks pack: every other track, in a
+`TORCS-tracks/!TORCS/tracks` tree to copy over the application, with
+`riscos/TracksPack-ReadMe`. The release uses
+`TRACKS_PACK=TORCS-tracks-1.3.7 build/package.sh 1.3.7-riscosN`.
 
 ## The patch series
 

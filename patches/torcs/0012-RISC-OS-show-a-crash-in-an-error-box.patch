@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Wed, 7 Oct 2026 15:43:01 +0100
+Subject: [PATCH] RISC OS: show a crash in an error box
+
+The crash handler wrote the RISC OS error and a backtrace to the log and
+left: on screen the program just vanished. It now also reports the error
+with Wimp_ReportError, pointing to the log (once only, in case the report
+itself faults).
+---
+ src/linux/riscosplatform.cpp | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/src/linux/riscosplatform.cpp b/src/linux/riscosplatform.cpp
+index 639b0a9..fae0106 100644
+--- a/src/linux/riscosplatform.cpp
++++ b/src/linux/riscosplatform.cpp
+@@ -45,12 +45,33 @@
+ static void
+ riscosErrorReport(int signum)
+ {
++	static volatile int reporting = 0;
+ 	const _kernel_oserror *e = _kernel_last_oserror();
+ 	if (e != NULL) {
+ 		fprintf(stderr, "\nRISC OS error &%X: %s\n", (unsigned int)e->errnum, e->errmess);
+ 	}
+ 	__write_backtrace(signum);
+ 	fflush(stderr);
++
++	/* Say so on the screen too: without this the program just vanishes
++	   (a forum report of 1.3.7-riscos1). Once only, in case the report
++	   itself faults. */
++	if (!reporting) {
++		reporting = 1;
++		_kernel_oserror err;
++		_kernel_swi_regs r;
++		const char *log = getenv("TORCS$Log");
++		err.errnum = 0;
++		snprintf(err.errmess, sizeof(err.errmess),
++			"TORCS has stopped: %s. %s",
++			e != NULL ? e->errmess : "a fatal error",
++			(log != NULL && *log != 0) ? "The details are in <Wimp$ScrapDir>.TORCSLog."
++			                           : "Set TORCS$Log in !Run to get the details.");
++		r.r[0] = (int)&err;
++		r.r[1] = 1 | 16;	/* OK box, no "Error from" prefix */
++		r.r[2] = (int)"TORCS";
++		_kernel_swi(0x400DF /* Wimp_ReportError */, &r, &r);
++	}
+ 	/* _exit, not exit: memory may be damaged, so run no destructors. */
+ 	_exit(2);
+ }

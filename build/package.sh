@@ -3,8 +3,9 @@
 # the game data installed by TORCS's own "make install datainstall", the
 # RISC OS default settings and the program as an Absolute file).
 #   build/package.sh VERSION      (after build/build-torcs.sh)
-# TRACKS: the tracks to include (category/name ...), default a small set
-# for testing; TRACKS=all for every track (about 435 MB).
+# TRACKS: the tracks to include (category/name ...), default a set of 9;
+# TRACKS=all for every track (about 435 MB). TRACKS_PACK=NAME also makes
+# dist/NAME.zip with all the other tracks (the tracks pack).
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
 VERSION=${1:?usage: package.sh VERSION}
@@ -57,5 +58,25 @@ if grep -rqa "$WORK" "$APP/!RunImage,ff8"; then echo "build path found in the pr
 mkdir -p "$OUT"; rm -f "$OUT/TORCS-$VERSION.zip"
 python3 "$RISCOS_DEVKIT/bin/mkrozip.py" "$OUT/TORCS-$VERSION.zip" "$APP"
 du -sh "$APP"
+
+# --- the tracks pack: every track not in the application, in a zip whose
+# !TORCS directory is copied over the installed one (the tracks belong to
+# the game data, not to a port release, hence the TORCS version in its name)
+if [ "$TRACKS" != all ] && [ -n "${TRACKS_PACK:-}" ]; then
+  PK="$STAGE_PKG/pack/TORCS-tracks"; mkdir -p "$PK/!TORCS/tracks"
+  for cd in "$DATA"/tracks/*/; do
+    cat=$(basename "$cd")
+    for td in "$cd"*/; do
+      t=$cat/$(basename "$td")
+      [ -d "$APP/tracks/$t" ] && continue
+      mkdir -p "$PK/!TORCS/tracks/$cat"; cp -r "$td" "$PK/!TORCS/tracks/$t"
+    done
+  done
+  cp "$RT_DIR/riscos/TracksPack-ReadMe,fff" "$PK/ReadMe,fff"
+  rm -f "$OUT/$TRACKS_PACK.zip"
+  python3 "$RISCOS_DEVKIT/bin/mkrozip.py" "$OUT/$TRACKS_PACK.zip" "$PK"
+  ls -d "$PK/!TORCS/tracks"/*/* | sed 's|.*/tracks/||' | tr '\n' ' '; echo
+  ls -l "$OUT/$TRACKS_PACK.zip"; md5sum "$OUT/$TRACKS_PACK.zip"
+fi
 rm -rf "$STAGE_PKG"
 ls -l "$OUT/TORCS-$VERSION.zip"; md5sum "$OUT/TORCS-$VERSION.zip"

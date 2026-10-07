@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.7-riscos2 (2026-10-07)
+
+- Fix: every race type except Quick Race (Non-Championship, Endurance,
+  Championship, Challenge, Practice) was set up for tracks that aren't in
+  the download, and starting it crashed (forum report: "it quits after a
+  few clicks"). A race set up for a track that isn't installed now runs on
+  an installed track instead, and says so.
+- New: a tracks pack, `TORCS-tracks-1.3.7.zip`, with the other 29 tracks
+  (all 38 of Debian's TORCS 1.3.7 together with the 9 in the main
+  download). Copied over `!TORCS`, it gives every race type its usual
+  tracks.
+- A crash now shows an error box (pointing to the log) instead of the
+  program just disappearing.
+
 ## 1.3.7-riscos1 (2026-10-07): first release
 
 - The first public release, the same as test build m2-6, relinked with the

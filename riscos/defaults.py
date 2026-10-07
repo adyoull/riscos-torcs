@@ -72,3 +72,4 @@ def graph(s):
                   '  </section>\n</params>')
     return s
 edit('config/graph.xml', graph)
+

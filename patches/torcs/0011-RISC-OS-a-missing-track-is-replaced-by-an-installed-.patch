@@ -1,0 +1,187 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Wed, 7 Oct 2026 15:43:01 +0100
+Subject: [PATCH] RISC OS: a missing track is replaced by an installed one
+
+The RISC OS package has 9 of the 38 tracks (the others are in a separate
+tracks pack), and every race type but Quick Race names other tracks in its
+default settings. A race on such a track crashed in ssgKidList::addEntity
+(grscene.cpp added the NULL that the missing 3D file gave): forum report
+of 1.3.7-riscos1, "it quits after a few clicks". Now:
+- racemain.cpp: before the event starts, if the race's track isn't
+  installed, it is replaced for this session by an installed track of the
+  same category that the race's list doesn't use (or any installed track),
+  with a message saying so. The race types keep their own track lists, so
+  with the tracks pack installed they are used as they are. With no track
+  at all the race menu comes back.
+- grscene.cpp: a track without its 3D file is refused instead of adding
+  NULL to the scene.
+---
+ src/libs/raceengineclient/racemain.cpp   | 132 +++++++++++++++++++++++
+ src/modules/graphic/ssggraph/grscene.cpp |   5 +
+ 2 files changed, 137 insertions(+)
+
+diff --git a/src/libs/raceengineclient/racemain.cpp b/src/libs/raceengineclient/racemain.cpp
+index 748c814..5409914 100644
+--- a/src/libs/raceengineclient/racemain.cpp
++++ b/src/libs/raceengineclient/racemain.cpp
+@@ -103,11 +103,143 @@ AbortRaceHookInit(void)
+ 	return AbortRaceHookHandle;
+ }
+ 
++#if defined(__riscos__) || defined(TORCS_STATIC_MODULES)
++#include <sys/stat.h>
++#include <string.h>
++#ifdef __riscos__
++#include <kernel.h>
++#endif
++
++static bool
++reTrackFile(const char *cat, const char *name)
++{
++	char file[1024];
++	struct stat st;
++	snprintf(file, sizeof(file), "tracks/%s/%s/%s.xml", cat, name, name);
++	return *cat != 0 && *name != 0 && stat(file, &st) == 0;
++}
++
++/* Is the track named somewhere in the race's track list? */
++static bool
++reTrackListed(const char *cat, const char *name)
++{
++	char path[256];
++	int n = GfParmGetEltNb(ReInfo->params, RM_SECT_TRACKS);
++	for (int i = 1; i <= n; i++) {
++		snprintf(path, sizeof(path), "%s/%d", RM_SECT_TRACKS, i);
++		if (strcmp(GfParmGetStr(ReInfo->params, path, RM_ATTR_NAME, ""), name) == 0 &&
++		    strcmp(GfParmGetStr(ReInfo->params, path, RM_ATTR_CATEGORY, ""), cat) == 0) {
++			return true;
++		}
++	}
++	return false;
++}
++
++/* An installed track of category cat into buf (one the race's track list
++   doesn't name, if there is one); false if the category has none. */
++static bool
++reSpareTrack(const char *cat, char *buf, size_t size)
++{
++	char dir[256];
++	snprintf(dir, sizeof(dir), "tracks/%s", cat);
++	tFList *list = GfDirGetList(dir);
++	bool found = false;
++	if (list != NULL) {
++		for (int pass = 0; pass < 2 && !found; pass++) {
++			tFList *cur = list;
++			do {
++				if (cur->name != NULL && cur->name[0] != '.' && reTrackFile(cat, cur->name) &&
++				    (pass == 1 || !reTrackListed(cat, cur->name))) {
++					snprintf(buf, size, "%s", cur->name);
++					found = true;
++					break;
++				}
++				cur = cur->next;
++			} while (cur != list);
++		}
++		GfDirFreeList(list, NULL, true, false);
++	}
++	return found;
++}
++
++/* The race's current track must be installed: the RISC OS package has 9
++   of the 38 tracks (the rest are in a tracks pack), and the race types'
++   default settings name others. A missing track is replaced, for this
++   session, by an installed one of the same category (or any category),
++   with a message; with the pack installed, the race types' own tracks are
++   used. If there's no track at all, the race menu comes back. (A missing
++   track crashed in the graphics engine: forum report of 1.3.7-riscos1.) */
++static bool
++reTrackInstalled(void)
++{
++	const int BUFSIZE = 1024;
++	char path[BUFSIZE], spare[BUFSIZE], spareCat[64];
++
++	int curTrkIdx = (int)GfParmGetNum(ReInfo->results, RE_SECT_CURRENT, RE_ATTR_CUR_TRACK, NULL, 1);
++	snprintf(path, BUFSIZE, "%s/%d", RM_SECT_TRACKS, curTrkIdx);
++	char trackName[256], catName[64];
++	snprintf(trackName, sizeof(trackName), "%s", GfParmGetStr(ReInfo->params, path, RM_ATTR_NAME, ""));
++	snprintf(catName, sizeof(catName), "%s", GfParmGetStr(ReInfo->params, path, RM_ATTR_CATEGORY, ""));
++	if (reTrackFile(catName, trackName)) {
++		return true;
++	}
++
++	bool found = false;
++	if (*catName != 0 && reSpareTrack(catName, spare, sizeof(spare))) {
++		snprintf(spareCat, sizeof(spareCat), "%s", catName);
++		found = true;
++	} else {
++		static const char *const cats[] = { "road", "oval", "dirt", NULL };
++		for (int i = 0; cats[i] != NULL && !found; i++) {
++			if (reSpareTrack(cats[i], spare, sizeof(spare))) {
++				snprintf(spareCat, sizeof(spareCat), "%s", cats[i]);
++				found = true;
++			}
++		}
++	}
++
++	char msg[300];
++	if (found) {
++		GfParmSetStr(ReInfo->params, path, RM_ATTR_NAME, spare);
++		GfParmSetStr(ReInfo->params, path, RM_ATTR_CATEGORY, spareCat);
++		snprintf(msg, sizeof(msg),
++			"The track %s isn't installed (it's in the TORCS tracks pack), so this race is on %s.",
++			*trackName ? trackName : "(none)", spare);
++	} else {
++		snprintf(msg, sizeof(msg), "The track %s isn't installed, and no other track is.",
++			*trackName ? trackName : "(none)");
++	}
++	GfOut("RaceEngine: %s\n", msg);
++#ifdef __riscos__
++	_kernel_oserror err;
++	_kernel_swi_regs r;
++	err.errnum = 0;
++	snprintf(err.errmess, sizeof(err.errmess), "%s", msg);
++	r.r[0] = (int)&err;
++	r.r[1] = 1 | 16;	/* OK box, no "Error from" prefix */
++	r.r[2] = (int)"TORCS";
++	_kernel_swi(0x400DF /* Wimp_ReportError */, &r, &r);
++#endif
++	if (found) {
++		return true;
++	}
++	ReInfo->_reState = RE_STATE_CONFIG;
++	return false;
++}
++#endif
++
+ int
+ ReRaceEventInit(void)
+ {
+ 	void *params = ReInfo->params;
+ 
++#if defined(__riscos__) || defined(TORCS_STATIC_MODULES)
++	/* A race set up for a track that isn't installed would crash in the
++	   graphics engine: use an installed one instead (see above). */
++	if (ReInfo->_displayMode == RM_DISP_MODE_NORMAL && !reTrackInstalled()) {
++		return RM_SYNC;
++	}
++#endif
+ 	RmLoadingScreenStart(ReInfo->_reName, "data/img/splash-qrloading.png");
+ 	ReInitTrack();
+ 	if (
+diff --git a/src/modules/graphic/ssggraph/grscene.cpp b/src/modules/graphic/ssggraph/grscene.cpp
+index 32a737a..d4f225e 100644
+--- a/src/modules/graphic/ssggraph/grscene.cpp
++++ b/src/modules/graphic/ssggraph/grscene.cpp
+@@ -241,6 +241,11 @@ grLoadScene(tTrack *track)
+ 	ssgModelPath(buf);
+ 
+ 	desc = grssgLoadAC3D(acname, NULL);
++	if (desc == NULL) {
++		/* The track's 3D file is missing: addKid(NULL) would crash. */
++		GfOut("grscene: no 3D description %s for track %s\n", acname, grTrack->internalname);
++		return -1;
++	}
+ 	LandAnchor->addKid(desc);
+ 
+ 	return 0;

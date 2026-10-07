@@ -1,0 +1,30 @@
+TORCS tracks pack
+=================
+
+This pack holds the 29 TORCS tracks that aren't in the main TORCS download
+(which has 9). Together they make all 38 of the tracks in Debian's
+free-software TORCS 1.3.7.
+
+To install
+----------
+1. Find the directory that holds your !TORCS application.
+2. Copy the !TORCS directory from this pack into that same directory, for
+   example by dragging it from this window onto that directory's window.
+   The Filer merges it into your !TORCS and adds the tracks. Nothing in
+   your copy is replaced.
+
+Then start TORCS. The new tracks appear in Configure Race, and each race
+type (Non-Championship, Endurance, Championship and so on) uses its usual
+tracks.
+
+Without the pack, a race type that names a track you don't have runs on
+one of the tracks you do have, and says so.
+
+The tracks are big, and some are slower to draw than others. The pack
+works with every TORCS 1.3.7 release for RISC OS (1.3.7-riscos2 and
+later).
+
+Licences
+--------
+The tracks are part of TORCS's game data, under the licences listed in
+!TORCS.Licences.TORCS-data in the main download.

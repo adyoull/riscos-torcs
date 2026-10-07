@@ -26,6 +26,9 @@ case riscos-mesa's software renderer handles best.
 | 0007 desktop start-up | `riscosplatform.cpp` (log file, crash report, `<TORCS$Dir>` / `<Choices$Write>.TORCS`, first-run copy of the settings, run in the data directory); multitexturing off unless `-M`; no X11 game mode; no `execlp` (screen settings: save and quit); no `sh` for telemetry; small window sizes in the Display menu |
 | 0008 fast textured triangles | `GL_FASTEST`, `GL_CLAMP` → `GL_CLAMP_TO_EDGE`, luminance textures expanded to RGB(A), `GL_SINGLE_COLOR` lighting |
 | 0009 speed | first run: a desktop window in the screen's shape, 540 high, opened near the centre (full screen, in Options > Display, is freeglut game mode: render size + overlay); 16:10 and 16:9 Display sizes; "Sky background" option in Graphic Configuration (RISC OS default off); RGBA font textures |
+| 0010 scene resolution | the 3D scene drawn at a percentage of the window size ("scene scale" in graph.xml, Graphic Configuration "Scene resolution", RISC OS default 50) and stretched with a textured quad; the board and menus at full size |
+| 0011 missing tracks | a race set up for a track that isn't installed runs, for that session, on an installed track of the same category that the race's list doesn't use (Wimp message); with the tracks pack the race types' own lists apply; grscene refuses a NULL 3D model |
+| 0012 crash box | the crash handler also shows the error with Wimp_ReportError |
 
 The plib patch (`patches/plib/10-riscos-platform.patch`) adds `UL_RISCOS`: no
 `dlopen`, the ssg context check through EGL, a joystick back end on the

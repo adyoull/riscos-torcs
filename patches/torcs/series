@@ -8,3 +8,5 @@
 0008-RISC-OS-textures-on-Mesa-s-fast-textured-triangle-pa.patch
 0009-RISC-OS-speed-draw-size-sky-background-option-RGBA-f.patch
 0010-RISC-OS-3D-scene-at-a-reduced-resolution-writing-at-.patch
+0011-RISC-OS-a-missing-track-is-replaced-by-an-installed-.patch
+0012-RISC-OS-show-a-crash-in-an-error-box.patch
