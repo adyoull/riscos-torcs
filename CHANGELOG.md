@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.7-riscos1 (2026-10-07): first release
+
+- The first public release, the same as test build m2-6, relinked with the
+  released riscos-mesa devkit 20.3.5-14: its NEON texturing and blending make
+  TORCS about 30% faster on a Pi 4 (10.3 fps against 7.9 with 20.3.5-13 in
+  the Pi A/B test of 14rc1, the same Mesa code).
+- Linked with UnixLib 5.0.3.3.
+
 ## m2-6 (2026-10-06)
 
 - Linked with UnixLib 5.0.3.3 (was the toolchain's 5.0.3.2): fixes from a

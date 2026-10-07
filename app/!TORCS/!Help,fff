@@ -2,7 +2,8 @@ TORCS - The Open Racing Car Simulator, for RISC OS
 ===================================================
 
 TORCS 1.3.7 (Debian's free-software source), ported to RISC OS by Andrew
-Youll (riscos-torcs). This is a TEST BUILD.
+Youll (riscos-torcs), release 1.3.7-riscos1. AI (Anthropic's Claude) has
+been used as a coding assistant on this port.
 
 Requirements
 ------------
@@ -60,7 +61,7 @@ Options
   - Visibility, smoke, skid marks, wheels, and the sky background (the
     panorama around the track; off by default: it costs a fifth of the
     drawing time).
-- The !Run file has settings: a log file (TORCS$Log, on in test builds:
+- The !Run file has settings: a log file (TORCS$Log, on by default:
   <Wimp$ScrapDir>.TORCSLog), and -M for multitexturing (slower).
 - Your settings and race results are in <Choices$Write>.TORCS. Delete
   that directory to go back to the defaults.

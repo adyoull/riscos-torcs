@@ -1,7 +1,7 @@
 # Source this: . build/env.sh
 # Settings for the riscos-torcs build scripts. Each can be set first.
 #   RISCOS_TOOLCHAIN  riscos-crossdev toolchain 1.3 (UnixLib 5.0.3.2, static)
-#   RISCOS_DEVKIT     riscos-mesa devkit (20.3.5-13: OpenAL, freeglut, EGL)
+#   RISCOS_DEVKIT     riscos-mesa devkit (20.3.5-14: OpenAL, freeglut, EGL)
 #   RISCOS_UNIXLIB    optional: a directory with a newer libunixlib.a (UnixLib
 #                     5.0.3.3 from the riscos-unixlib release) linked instead
 #                     of the toolchain's; its headers are unchanged since 5.0.3.2

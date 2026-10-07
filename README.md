@@ -7,9 +7,13 @@ free-software TORCS 1.3.7 source (`torcs_1.3.7+dfsg`), plus the scripts that
 cross-build it and the RISC OS application files. It doesn't contain TORCS
 itself: `build/fetch.sh` downloads the sources and checks them.
 
-Status: **test builds**. m1-1 runs on a Pi 4 (4.8 fps in a 640x480
-window); m2-4 draws the 3D scene at half size under full-size writing
-(7.8 fps full screen on a Pi 4); m2-5 opens in a 960x540 desktop window.
+Status: **first release, 1.3.7-riscos1**. On a Raspberry Pi 4 it runs at
+about 10 fps in its default 960x540 desktop window, with the 3D scene drawn
+at half size under full-size writing (software OpenGL on the CPU). Nine
+tracks are included; you race alone by default (computer drivers can be
+added). See `CHANGELOG.md` for the test builds before it.
+
+AI (Anthropic's Claude) has been used as a coding assistant on this port.
 
 ## How it fits together
 
