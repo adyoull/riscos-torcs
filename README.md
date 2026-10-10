@@ -7,7 +7,7 @@ free-software TORCS 1.3.7 source (`torcs_1.3.7+dfsg`), plus the scripts that
 cross-build it and the RISC OS application files. It doesn't contain TORCS
 itself: `build/fetch.sh` downloads the sources and checks them.
 
-Status: **release 1.3.7-riscos2**. On a Raspberry Pi 4 it runs at
+Status: **release 1.3.7-riscos3**. On a Raspberry Pi 4 it runs at
 about 10 fps in its default 960x540 desktop window, with the 3D scene drawn
 at half size under full-size writing (software OpenGL on the CPU). Nine
 tracks are included, and a tracks pack adds the other 29; you race alone

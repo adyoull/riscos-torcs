@@ -13,8 +13,8 @@ Everything is cross-built on Linux (x86-64; Ubuntu 24.04 tested).
   `RISCOS_UNIXLIB` to it. Its headers are the same as 5.0.3.2's. Without
   `RISCOS_UNIXLIB` the toolchain's UnixLib is used; `build-torcs.sh` prints
   which one it linked.
-- The **riscos-mesa devkit 20.3.5-14** (the GitHub release v20.3.5-14,
-  `riscos-mesa-devkit-20.3.5-14.tgz`, sha256 `3c3c9bb0bd65b62bb7a58fda5a213a0683c2b8cb8687ca6c267bbf2f9b4588e4`):
+- The **riscos-mesa devkit 20.3.5-16** (the GitHub release v20.3.5-16,
+  `riscos-mesa-devkit-20.3.5-16.tgz`, sha256 `069de4126d43b055d9712325d5727e336c03ce084ad87a495ccff79ed26956a4`):
   OSMesa, EGL, GLU, freeglut with the RISC OS back end, OpenAL, SDL 2, zlib,
   PThreadTicker. Its GLUT game mode draws at the requested size and
   stretches it, which TORCS's full screen relies on.
@@ -24,12 +24,12 @@ Everything is cross-built on Linux (x86-64; Ubuntu 24.04 tested).
 
 ```sh
 export RISCOS_TOOLCHAIN=/opt/rcd/riscos-crossdev-toolchain-1.3-x86_64-linux
-export RISCOS_DEVKIT=/opt/devkit/riscos-mesa-devkit-20.3.5-14
+export RISCOS_DEVKIT=/opt/devkit/riscos-mesa-devkit-20.3.5-16
 export RISCOS_UNIXLIB=/opt/unixlib/5.0.3.3   # holds libunixlib.a
 build/fetch.sh            # sources from archive.ubuntu.com, checked, TORCS patched
 build/build-deps.sh       # libpng, ogg, vorbis, freealut, plib -> work/stage
 build/build-torcs.sh      # TORCS -> work/torcs/src/linux/torcs (ELF)
-build/package.sh 1.3.7-riscos1   # -> dist/TORCS-1.3.7-riscos1.zip
+TRACKS_PACK=TORCS-tracks-1.3.7 build/package.sh 1.3.7-riscos3   # -> dist/TORCS-1.3.7-riscos3.zip
 ```
 
 `WORK` (default `./work`) holds the sources, the staged libraries and the build;

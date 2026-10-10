@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.7-riscos3 (2026-10-10)
+
+- Linked with riscos-mesa 20.3.5-16 (was 20.3.5-14). From 20.3.5-15:
+  TORCS's scene now takes Mesa's fast route (plib's alpha test on every
+  state had kept it off), pixels hidden by the depth test aren't textured
+  (a third of TORCS's scene), and the bilinear filtering and the scene
+  stretch are quicker. From 20.3.5-16: on high-resolution (EX0 EY0)
+  desktops the window is shown at twice the size instead of half size
+  (`*Set EGL$WindowScale 1` for full resolution).
+- No changes to TORCS itself.
+
 ## 1.3.7-riscos2 (2026-10-07)
 
 - Fix: every race type except Quick Race (Non-Championship, Endurance,
