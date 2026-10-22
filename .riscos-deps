@@ -1,0 +1,7 @@
+# NAME TAG: the releases (github.com/adyoull/NAME) riscos-torcs is built
+# with (riscos-crossdev's docs/CI.md). The riscos-crossdev line chooses the
+# container image the GitHub workflows build in. The riscos-mesa line is the
+# devkit build/fetch.sh downloads; its sha256 is in build/SHA256SUMS
+# (ci/riscos-deps-hook.sh moves that line with this one).
+riscos-crossdev v1.8.2
+riscos-mesa v20.3.5-17

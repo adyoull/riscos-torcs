@@ -6,7 +6,7 @@
 #   build/fetch.sh
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
-mkdir -p "$DL"
+mkdir -p "$DL" "$WORK"
 UB=http://archive.ubuntu.com/ubuntu/pool
 declare -A URL=(
   [torcs_1.3.7+dfsg.orig.tar.xz]=$UB/universe/t/torcs
@@ -21,6 +21,19 @@ for f in "${!URL[@]}"; do
 done
 (cd "$DL" && grep -E "torcs_1.3.7\+dfsg.orig|plib_1.8.5.orig|freealut|libpng|libogg|libvorbis" \
    "$RT_DIR/build/SHA256SUMS" | sha256sum -c --quiet -)
+
+# The riscos-mesa devkit .riscos-deps names, unless RISCOS_DEVKIT is
+# already that version (env.sh).
+if [ "$RISCOS_DEVKIT" = "$WORK/riscos-mesa-devkit-$MESA_VERSION" ] && [ ! -f "$RISCOS_DEVKIT/VERSION" ]; then
+  [ -f "$DL/$MESA_DEVKIT_FILE" ] || { echo "fetching $MESA_DEVKIT_FILE"; curl -sSfL --retry 3 -o "$DL/$MESA_DEVKIT_FILE" "$MESA_DEVKIT_URL"; }
+  grep -q " $MESA_DEVKIT_FILE\$" "$RT_DIR/build/SHA256SUMS" ||
+    { echo "build/SHA256SUMS has no line for $MESA_DEVKIT_FILE" >&2; exit 1; }
+  (cd "$DL" && grep " $MESA_DEVKIT_FILE\$" "$RT_DIR/build/SHA256SUMS" | sha256sum -c --quiet -)
+  tar xzf "$DL/$MESA_DEVKIT_FILE" -C "$WORK"
+  [ "$(cat "$RISCOS_DEVKIT/VERSION")" = "riscos-mesa devkit $MESA_VERSION" ] ||
+    { echo "$MESA_DEVKIT_FILE didn't unpack to $RISCOS_DEVKIT" >&2; exit 1; }
+fi
+echo "riscos-mesa devkit: $RISCOS_DEVKIT"
 
 if [ ! -d "$TORCS_SRC" ]; then
   echo "unpacking TORCS"

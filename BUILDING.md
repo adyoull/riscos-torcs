@@ -4,32 +4,38 @@ Everything is cross-built on Linux (x86-64; Ubuntu 24.04 tested).
 
 ## What you need
 
-- The **riscos-crossdev toolchain 1.3** (GCCSDK GCC 10.2, UnixLib 5.0.3.2,
-  static only, `elf2aif`, `qemu-arm-aligntrap`), unpacked anywhere:
-  `riscos-crossdev-toolchain-1.3-x86_64-linux.tar.xz`.
-- **UnixLib 5.0.3.3** (riscos-unixlib release v5.0.3.3, `libunixlib.a`,
-  sha256 `e24f16c3f4612aae3871ceff521ab86b0d3ac4cc689d734e0e4085d02c774adf`),
-  linked instead of the toolchain's 5.0.3.2: put it in a directory and set
-  `RISCOS_UNIXLIB` to it. Its headers are the same as 5.0.3.2's. Without
-  `RISCOS_UNIXLIB` the toolchain's UnixLib is used; `build-torcs.sh` prints
-  which one it linked.
-- The **riscos-mesa devkit 20.3.5-17** (the GitHub release v20.3.5-17,
-  `riscos-mesa-devkit-20.3.5-17.tgz`, sha256 `e0bea16a604265cde8d360055d2cb57dc38f4c7442954e599c393acd4c1395b8`):
-  OSMesa, EGL, GLU, freeglut with the RISC OS back end, OpenAL, SDL 2, zlib,
-  PThreadTicker. Its GLUT game mode draws at the requested size and
-  stretches it, which TORCS's full screen relies on.
-- Host packages: `build-essential python3 python3-pil curl git`.
+The easy way is riscos-crossdev's container image, which has everything
+(the version is the `riscos-crossdev` line of `.riscos-deps`):
+
+```sh
+docker run --rm -v "$PWD":/src ghcr.io/adyoull/riscos-crossdev:1.8.2 sh -c \
+  'build/fetch.sh && build/build-deps.sh && build/build-torcs.sh && build/package.sh test'
+```
+
+Without Docker:
+
+- **riscos-crossdev's toolchain** (GCCSDK GCC 10.2, UnixLib 5.0.3.3, static
+  only, `elf2aif`, `qemu-arm-aligntrap`): the release named in
+  `.riscos-deps` (its `toolchain/PREBUILT` names the tarball), installed
+  with its `make prebuilt` or unpacked anywhere; set `RISCOS_TOOLCHAIN` to
+  it. (Unpacked by hand, run its `toolchain/relocate.sh` once.)
+- **The riscos-mesa devkit** named in `.riscos-deps`: OSMesa, EGL, GLU,
+  freeglut with the RISC OS back end, OpenAL, SDL 2, zlib, PThreadTicker.
+  `build/fetch.sh` downloads it from the riscos-mesa GitHub release, checks
+  it against `build/SHA256SUMS` and unpacks it into `$WORK`, unless
+  `RISCOS_DEVKIT` already points at that version.
+- `RISCOS_UNIXLIB` (optional): a directory with a `libunixlib.a` to link
+  instead of the toolchain's.
+- Host packages: `build-essential python3 curl git`.
 - For the tests: `g++-arm-linux-gnueabihf` (QEMU test); for profiling, see
   `tools/profile/README.md`.
 
 ```sh
-export RISCOS_TOOLCHAIN=/opt/rcd/riscos-crossdev-toolchain-1.3-x86_64-linux
-export RISCOS_DEVKIT=/opt/devkit/riscos-mesa-devkit-20.3.5-17
-export RISCOS_UNIXLIB=/opt/unixlib/5.0.3.3   # holds libunixlib.a
-build/fetch.sh            # sources from archive.ubuntu.com, checked, TORCS patched
+export RISCOS_TOOLCHAIN=/opt/riscos-crossdev/toolchain/env
+build/fetch.sh            # sources from archive.ubuntu.com and the devkit, checked; TORCS patched
 build/build-deps.sh       # libpng, ogg, vorbis, freealut, plib -> work/stage
 build/build-torcs.sh      # TORCS -> work/torcs/src/linux/torcs (ELF)
-TRACKS_PACK=TORCS-tracks-1.3.7 build/package.sh 1.3.7-riscos4   # -> dist/TORCS-1.3.7-riscos3.zip
+TRACKS_PACK=TORCS-tracks-1.3.7 build/package.sh 1.3.7-riscosN   # -> dist/TORCS-1.3.7-riscosN.zip
 ```
 
 `WORK` (default `./work`) holds the sources, the staged libraries and the build;
@@ -94,3 +100,22 @@ configure step for the cross build).
 ## Commits
 
 Author Andrew Youll <andrewyoull86@gmail.com>, no tool attribution lines.
+
+## Building on GitHub
+
+`.github/workflows/` has riscos-crossdev's two workflows (its `docs/CI.md`):
+
+- `riscos-build.yml` builds, checks and tests every push and pull request in
+  the riscos-crossdev image named in `.riscos-deps`, and keeps the zip as a
+  download on the run's page.
+- `riscos-deps-update.yml` looks every day for newer releases of what
+  `.riscos-deps` names (riscos-crossdev, riscos-mesa). When there is one, it
+  moves the pin (and, through `ci/riscos-deps-hook.sh`, the devkit's line in
+  `build/SHA256SUMS`), builds and tests with it, and opens a pull request
+  saying whether that passed. Nothing is merged or released by itself: merge,
+  test on a Pi, then release.
+
+The build they run: `build/fetch.sh`, `build/build-deps.sh`,
+`build/build-torcs.sh`, riscos-crossdev's `checks/check-all.sh` on the program,
+`build/package.sh ci`, then the QEMU alignment test (`tests/qemu`, a console
+race on forza).

@@ -46,6 +46,7 @@ AI (Anthropic's Claude) has been used as a coding assistant on this port.
 | `riscos/licences/` | the licences shipped in the application |
 | `tests/qemu/` | the ARM alignment test (a console race under QEMU with RISC OS's alignment rules) |
 | `tools/profile/` | host profiling of a race frame on riscos-mesa's software renderer |
+| `.riscos-deps`, `.github/workflows/`, `ci/` | the releases it's built with, and the GitHub builds and dependency pull requests (BUILDING.md) |
 
 See `BUILDING.md` to build, `docs/PORTING-NOTES.md` for what the patches do and
 why.

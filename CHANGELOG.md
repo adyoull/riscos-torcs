@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Builds on GitHub (riscos-crossdev's workflows): every push is built,
+  checked and tested in the riscos-crossdev image, and a pull request comes
+  when riscos-crossdev or riscos-mesa makes a release. `.riscos-deps` names
+  the versions; `build/fetch.sh` downloads the riscos-mesa devkit it names.
+- Built with riscos-crossdev 1.8.2's toolchain (UnixLib 5.0.3.3 in the
+  toolchain itself, so `RISCOS_UNIXLIB` isn't needed any more).
+
 ## 1.3.7-riscos4 (2026-10-22)
 
 - Linked with riscos-mesa 20.3.5-17 (was 20.3.5-16). In full screen the
