@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.7-riscos4 (2026-10-22)
+
+- Linked with riscos-mesa 20.3.5-17 (was 20.3.5-16). In full screen the
+  pointer now stops two pixels above the bottom of the screen, so the icon
+  bar no longer pops up over the game when the desktop brings it forward
+  automatically (`*Set FreeGLUT$PointerMargin 0` turns this off). Drawing
+  is the same as 20.3.5-16.
+- No changes to TORCS itself.
+
 ## 1.3.7-riscos3 (2026-10-10)
 
 - Linked with riscos-mesa 20.3.5-16 (was 20.3.5-14). From 20.3.5-15:

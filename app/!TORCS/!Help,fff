@@ -2,7 +2,7 @@ TORCS - The Open Racing Car Simulator, for RISC OS
 ===================================================
 
 TORCS 1.3.7 (Debian's free-software source), ported to RISC OS by Andrew
-Youll (riscos-torcs), release 1.3.7-riscos3. AI (Anthropic's Claude) has
+Youll (riscos-torcs), release 1.3.7-riscos4. AI (Anthropic's Claude) has
 been used as a coding assistant on this port.
 
 Requirements
@@ -27,6 +27,11 @@ On a high-resolution desktop (EX0 EY0, "180 dpi" modes such as
 it's the same size on the screen as on a normal desktop and draws no
 more pixels. For the sharp picture at full resolution instead (slower),
 type *Set EGL$WindowScale 1 before starting TORCS.
+
+In full screen the pointer stops two pixels above the bottom of the
+screen, so the icon bar doesn't pop up over the game (when the desktop
+brings it forward automatically); Shift-F12 still brings it forward.
+*Set FreeGLUT$PointerMargin 0 before starting TORCS turns this off.
 
 Playing
 -------
