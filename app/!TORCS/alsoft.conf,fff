@@ -1,0 +1,17 @@
+# OpenAL Soft settings for TORCS on RISC OS.
+#
+# TORCS points OpenAL at this file (the ALSOFT_CONF variable) unless
+# ALSOFT_CONF is already set. Lines starting with # are comments.
+#
+# The sound is mixed by OpenAL in SDL's audio thread and played through
+# SharedSoundBuffer. SDL's RISC OS driver keeps three pieces queued.
+
+[general]
+
+# Mix in pieces of 2048 samples (about 46 ms at 44.1 kHz). About 140 ms
+# of sound is then queued, so a run of slow frames doesn't let it run dry
+# and break up. The cost is that the sound follows the game a little
+# later.
+# OpenAL's own default is 1024 (about 70 ms queued). The RISC OS OpenTTD
+# port uses 4096 (about 280 ms): try that if the sound still breaks up.
+period_size = 2048

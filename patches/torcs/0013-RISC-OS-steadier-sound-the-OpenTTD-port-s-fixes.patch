@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Wed, 4 Nov 2026 11:45:54 +0000
+Subject: [PATCH] RISC OS: steadier sound (the OpenTTD port's fixes)
+
+riscosplatform.cpp: ALSOFT_CONF names alsoft.conf in the data directory
+(the application) unless it's already set. The riscos-torcs app has
+period_size = 2048 there: OpenAL then opens SDL's audio with 2048-sample
+buffers, and SDL's RISC OS driver keeps three queued (about 140 ms,
+against 70 ms with OpenAL's default 1024; OpenTTD's -s sdl:samples=4096
+gives about 280 ms). UnixLib keeps a variable without a $ in its name in
+the program's own environment, so other OpenAL programs don't see it.
+
+gui.cpp: sched_yield() after each glutSwapBuffers in GfuiDisplay (the
+menus and the race), so the sound thread gets a turn every frame; TORCS
+never waits between frames.
+---
+ src/libs/tgfclient/gui.cpp   |  9 +++++++++
+ src/linux/riscosplatform.cpp | 12 ++++++++++++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/src/libs/tgfclient/gui.cpp b/src/libs/tgfclient/gui.cpp
+index f7a1d0c..09e0248 100644
+--- a/src/libs/tgfclient/gui.cpp
++++ b/src/libs/tgfclient/gui.cpp
+@@ -26,6 +26,9 @@
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <time.h>
++#ifdef __riscos__
++#include <sched.h>
++#endif
+ 
+ #include <tgfclient.h>
+ #include "gui.h"
+@@ -210,6 +213,12 @@ GfuiDisplay(void)
+ 
+ 	glDisable(GL_BLEND);
+ 	glutSwapBuffers();
++#ifdef __riscos__
++	/* TORCS never waits between frames. Let the sound thread (OpenAL
++	   mixing in SDL's audio thread) run after every frame, as the RISC OS
++	   OpenTTD port does, so a run of slow frames doesn't starve it. */
++	sched_yield();
++#endif
+ }
+ 
+ /** Hide the mouse cursor
+diff --git a/src/linux/riscosplatform.cpp b/src/linux/riscosplatform.cpp
+index fae0106..566b1c4 100644
+--- a/src/linux/riscosplatform.cpp
++++ b/src/linux/riscosplatform.cpp
+@@ -329,6 +329,18 @@ RiscosSetupDirs(void)
+ 			SetDataDir("/<TORCS$Dir>/");
+ 		}
+ 	}
++#ifdef __riscos__
++	/* OpenAL (the sound) reads its settings from the file named by
++	   ALSOFT_CONF. TORCS's are in alsoft.conf in the application, unless
++	   ALSOFT_CONF is already set. UnixLib keeps a variable whose name has
++	   no $ in the program's own environment, so other programs using
++	   OpenAL don't see it. */
++	if (getenv("ALSOFT_CONF") == NULL && strlen(GetDataDir()) != 0) {
++		char conf[1024];
++		snprintf(conf, sizeof(conf), "%salsoft.conf", GetDataDir());
++		setenv("ALSOFT_CONF", conf, 1);
++	}
++#endif
+ 	char results[1024];
+ 	makeDirs(GetLocalDir());
+ 	snprintf(results, sizeof(results), "%sresults", GetLocalDir());

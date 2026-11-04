@@ -2,6 +2,14 @@
 
 ## 1.3.7-riscos5 (2026-11-04)
 
+- Steadier sound, with the RISC OS OpenTTD port's fixes:
+  - OpenAL mixes in pieces of 2048 samples (was 1024), so SDL's RISC OS
+    driver keeps about 140 ms queued (was about 70 ms; OpenTTD uses 4096,
+    about 280 ms). The setting is in
+    `!TORCS.alsoft/conf`, which TORCS names in `ALSOFT_CONF` unless it's
+    already set (patch 0013).
+  - The sound thread is given a turn after every frame with
+    `sched_yield()` (patch 0013): TORCS never waits between frames.
 - Built with riscos-crossdev 1.10's toolchain, so UnixLib 5.0.3.6 (was
   5.0.3.3). Its semaphores now sleep: OpenAL's event thread used to spin in
   `sem_wait` for the whole race, taking CPU time from it; now it waits

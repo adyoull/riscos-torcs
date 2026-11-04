@@ -29,6 +29,7 @@ case riscos-mesa's software renderer handles best.
 | 0010 scene resolution | the 3D scene drawn at a percentage of the window size ("scene scale" in graph.xml, Graphic Configuration "Scene resolution", RISC OS default 50) and stretched with a textured quad; the board and menus at full size |
 | 0011 missing tracks | a race set up for a track that isn't installed runs, for that session, on an installed track of the same category that the race's list doesn't use (Wimp message); with the tracks pack the race types' own lists apply; grscene refuses a NULL 3D model |
 | 0012 crash box | the crash handler also shows the error with Wimp_ReportError |
+| 0013 sound | `ALSOFT_CONF` names the app's `alsoft.conf` (period_size 2048: SDL's RISC OS driver keeps ~140 ms queued; OpenTTD uses 4096) unless set; `sched_yield()` after each frame so the sound thread runs (both from the OpenTTD port) |
 
 The plib patch (`patches/plib/10-riscos-platform.patch`) adds `UL_RISCOS`: no
 `dlopen`, the ssg context check through EGL, a joystick back end on the
