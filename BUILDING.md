@@ -8,7 +8,7 @@ The easy way is riscos-crossdev's container image, which has everything
 (the version is the `riscos-crossdev` line of `.riscos-deps`):
 
 ```sh
-docker run --rm -v "$PWD":/src ghcr.io/adyoull/riscos-crossdev:1.8.2 sh -c \
+docker run --rm -v "$PWD":/src ghcr.io/adyoull/riscos-crossdev:1.10 sh -c \
   'build/fetch.sh && build/build-deps.sh && build/build-torcs.sh && build/package.sh test'
 ```
 

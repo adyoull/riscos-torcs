@@ -1,13 +1,22 @@
 # Changelog
 
-## Unreleased
+## 1.3.7-riscos5 (2026-11-04)
 
+- Built with riscos-crossdev 1.10's toolchain, so UnixLib 5.0.3.6 (was
+  5.0.3.3). Its semaphores now sleep: OpenAL's event thread used to spin in
+  `sem_wait` for the whole race, taking CPU time from it; now it waits
+  until there's an event.
+- Linked with riscos-mesa 20.3.5-18 (was 20.3.5-17): SDL 2.32.10, which
+  TORCS uses only for OpenAL's sound output, and OpenAL mixing with NEON.
+  Drawing is the same as 20.3.5-17.
 - Builds on GitHub (riscos-crossdev's workflows): every push is built,
   checked and tested in the riscos-crossdev image, and a pull request comes
   when riscos-crossdev or riscos-mesa makes a release. `.riscos-deps` names
   the versions; `build/fetch.sh` downloads the riscos-mesa devkit it names.
-- Built with riscos-crossdev 1.8.2's toolchain (UnixLib 5.0.3.3 in the
-  toolchain itself, so `RISCOS_UNIXLIB` isn't needed any more).
+  UnixLib comes from the toolchain, so `RISCOS_UNIXLIB` isn't needed.
+  The QEMU test build no longer needs X11 or GLX headers (the image has
+  none).
+- No changes to TORCS itself.
 
 ## 1.3.7-riscos4 (2026-10-22)
 

@@ -14,15 +14,27 @@ set -euo pipefail
 X=arm-linux-gnueabihf
 QF="-O2 -g -march=armv7-a -mfpu=vfpv3 -mfloat-abi=hard -mno-unaligned-access -fno-delete-null-pointer-checks"
 mkdir -p "$QDIR"
-# plib for ARM Linux (UL_LINUX), from build-deps.sh's patched sources
+# plib for ARM Linux (UL_LINUX), from build-deps.sh's patched sources.
+# Its ssg.cxx includes <GL/glx.h> on Linux, which neither the devkit nor
+# the riscos-crossdev image has: a stub declares the one function it uses
+# (stubbed to return 0 at link time, like the rest of GL).
 P=$WORK/deps/plib-1.8.5/src
+mkdir -p "$QDIR/include/GL"
+cat > "$QDIR/include/GL/glx.h" <<'GLX'
+#include <GL/gl.h>
+typedef void *GLXContext;
+#ifdef __cplusplus
+extern "C"
+#endif
+GLXContext glXGetCurrentContext(void);
+GLX
 if [ ! -f "$QDIR/plib/libplibsm.a" ]; then
   mkdir -p "$QDIR/plib"
   for d in util:ul sg:sg ssg:ssg ssgAux:ssgaux js:js sl:sl; do
     dir=${d%%:*}; lib=${d#*:}; rm -rf "$QDIR/plib/o-$lib"; mkdir -p "$QDIR/plib/o-$lib"
     for s in $(cd $P/$dir && ls *.cxx); do
       case "$dir:$s" in js:js*.cxx) [ "$s" = js.cxx ] || [ "$s" = jsLinux.cxx ] || continue;; sl:sm*) continue;; esac
-      $X-g++ $QF -I$P/util -I$P/sg -I$P/ssg -I$P/js -I$P/sl -I$RISCOS_DEVKIT/include -c $P/$dir/$s -o "$QDIR/plib/o-$lib/${s%.cxx}.o"
+      $X-g++ $QF -I$P/util -I$P/sg -I$P/ssg -I$P/js -I$P/sl -I$RISCOS_DEVKIT/include -I$QDIR/include -c $P/$dir/$s -o "$QDIR/plib/o-$lib/${s%.cxx}.o"
     done
     $X-ar rcs "$QDIR/plib/libplib$lib.a" "$QDIR/plib/o-$lib/"*.o
   done
@@ -37,7 +49,7 @@ cd "$T"
 sed -e "s/^CC = .*/CC = $X-gcc/; s/^CXX = .*/CXX = $X-g++/; s/^LD = .*/LD = $X-ld/; s/^AR = .*/AR = $X-ar/" \
     -e "s/^OBJCOPY = .*/OBJCOPY = $X-objcopy/; s/^RANLIB = .*/RANLIB = $X-ranlib/" \
     -e "s/^CPP = .*/CPP = $X-gcc -E \${RISCOS_INC} -M -D__DEPEND__/" \
-    -e 's/^CFLAGSD = .*/CFLAGSD = -D_GNU_SOURCE -DHAVE_CONFIG_H -DTORCS_STATIC_MODULES -DTORCS_SOFTWARE_GL/' \
+    -e 's/^CFLAGSD = .*/CFLAGSD = -D_GNU_SOURCE -DHAVE_CONFIG_H -DTORCS_STATIC_MODULES -DTORCS_SOFTWARE_GL -DTORCS_NO_X11/' \
     Make-config.riscos > Make-config
 cp config.h.riscos config.h
 export TORCS_BASE=$PWD MAKE_DEFAULT=$PWD/Make-default.mk RISCOS_CFLAGS="$QF" RISCOS_MAP=

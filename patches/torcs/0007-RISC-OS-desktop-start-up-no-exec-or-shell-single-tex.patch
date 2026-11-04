@@ -12,7 +12,8 @@ on the first run (as setup_linux.sh does) and the game runs in its data
 directory.
 main.cpp: multitexturing off unless -M (one texture unit keeps Mesa's
 software renderer on its fast textured-triangle path).
-fg_gm.cpp: no X11 game mode. screen.cpp: changing the screen settings
+fg_gm.cpp: no X11 game mode (also with TORCS_NO_X11,
+for the QEMU test build, which has no X11 headers). screen.cpp: changing the screen settings
 saves them and quits with a message (no execlp), and the Display menu
 offers window sizes from 320x240. telemetry: no sh.
 TORCS_STATIC_MODULES builds the same start-up on Linux, to test the
@@ -27,7 +28,7 @@ static modules on a host.
  create mode 100644 src/linux/riscosplatform.cpp
 
 diff --git a/src/libs/tgfclient/fg_gm.cpp b/src/libs/tgfclient/fg_gm.cpp
-index 36e2186..80df24f 100644
+index 36e2186..8ae5fba 100644
 --- a/src/libs/tgfclient/fg_gm.cpp
 +++ b/src/libs/tgfclient/fg_gm.cpp
 @@ -51,7 +51,7 @@
@@ -35,7 +36,7 @@ index 36e2186..80df24f 100644
  #include "fg_gm.h"
  
 -#ifndef WIN32
-+#if !defined(WIN32) && !defined(__riscos__)
++#if !defined(WIN32) && !defined(__riscos__) && !defined(TORCS_NO_X11)
  
  #include <GL/glx.h>
  #include <X11/Xlib.h>
@@ -44,7 +45,7 @@ index 36e2186..80df24f 100644
  void fglutGameModeString( const char* string )
  {
 -#ifndef WIN32
-+#if !defined(WIN32) && !defined(__riscos__)
++#if !defined(WIN32) && !defined(__riscos__) && !defined(TORCS_NO_X11)
      int width = 640, height = 480, depth = 16, refresh = 72;
  
      /*
@@ -53,7 +54,7 @@ index 36e2186..80df24f 100644
  int fglutEnterGameMode( void )
  {
 -#ifndef WIN32
-+#if !defined(WIN32) && !defined(__riscos__)
++#if !defined(WIN32) && !defined(__riscos__) && !defined(TORCS_NO_X11)
      /*
       * Remember the current resolution, etc.
       */
@@ -62,7 +63,7 @@ index 36e2186..80df24f 100644
  void fglutLeaveGameMode( void )
  {
 -#ifndef WIN32
-+#if !defined(WIN32) && !defined(__riscos__)
++#if !defined(WIN32) && !defined(__riscos__) && !defined(TORCS_NO_X11)
      /*
       * Then, have the desktop visual settings restored
       */
