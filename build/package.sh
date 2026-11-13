@@ -4,7 +4,8 @@
 # RISC OS default settings and the program as an Absolute file).
 #   build/package.sh VERSION      (after build/build-torcs.sh)
 # MIXED=1 packs the mixed program instead (dist/TORCS-<version>-mixed.zip;
-# needs MIXED=1 build/build-torcs.sh first).
+# needs MIXED=1 build/build-torcs.sh first). TRACE=1 switches the trace on
+# in !Run (TORCS$Trace), for test builds.
 # TRACKS: the tracks to include (category/name ...), default a set of 9;
 # TRACKS=all for every track (about 435 MB). TRACKS_PACK=NAME also makes
 # dist/NAME.zip with all the other tracks (the tracks pack).
@@ -24,6 +25,11 @@ rm -rf "$INST"
 DATA="$INST/riscos/share/games/torcs"
 
 cp -r "$RT_DIR/app/!TORCS" "$APP"
+# TRACE=1 (test builds): !Run sets TORCS$Trace, so the log has the trace.
+if [ -n "${TRACE:-}" ]; then
+  sed -i 's/^| Set TORCS\$Trace 1$/Set TORCS$Trace 1/' "$APP/!Run,feb"
+  grep -q '^Set TORCS\$Trace 1$' "$APP/!Run,feb" || { echo "TRACE: no Set TORCS\$Trace line in !Run" >&2; exit 1; }
+fi
 for d in cars categories config data drivers menu results wheels; do
   [ -d "$DATA/$d" ] && cp -r "$DATA/$d" "$APP/"
 done

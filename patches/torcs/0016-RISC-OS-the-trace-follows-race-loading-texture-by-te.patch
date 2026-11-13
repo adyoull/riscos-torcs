@@ -1,0 +1,116 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Fri, 13 Nov 2026 18:45:01 +0000
+Subject: [PATCH] RISC OS: the trace follows race loading texture by texture
+
+test2 still locked up at "Loading Track 3D Description" under RISC OS on
+Linux with RISC3D (no trace that time). The trace (TORCS$Trace) now also
+writes every loading-screen message, the scene's background and track
+model steps, each texture file (PNG and SGI), and for the first 40
+textures their size, format and the proxy texture's width; the stage
+names each GL call of the texture check and upload, so the watchdog can
+say which one the main thread is in.
+---
+ src/libs/racescreens/loadingscreen.cpp     |  4 ++++
+ src/modules/graphic/ssggraph/grscene.cpp   |  6 ++++++
+ src/modules/graphic/ssggraph/grtexture.cpp | 10 ++++++++++
+ src/modules/graphic/ssggraph/grutil.cpp    |  2 ++
+ 4 files changed, 22 insertions(+)
+
+diff --git a/src/libs/racescreens/loadingscreen.cpp b/src/libs/racescreens/loadingscreen.cpp
+index 142693d..fa3c90f 100644
+--- a/src/libs/racescreens/loadingscreen.cpp
++++ b/src/libs/racescreens/loadingscreen.cpp
+@@ -114,6 +114,10 @@ void RmLoadingScreenSetText(const char *text)
+ 	int i, j;
+ 	
+ 	GfOut("%s\n", text);
++	if (text != NULL) {
++		riscosTrace("loading screen: %s", text);
++	}
++	riscosTraceStage("loading screen: drawing the message");
+ 	
+ 	if (menuHandle) {
+ 		if (text) {
+diff --git a/src/modules/graphic/ssggraph/grscene.cpp b/src/modules/graphic/ssggraph/grscene.cpp
+index d4f225e..c69b5bc 100644
+--- a/src/modules/graphic/ssggraph/grscene.cpp
++++ b/src/modules/graphic/ssggraph/grscene.cpp
+@@ -223,7 +223,10 @@ grLoadScene(tTrack *track)
+ 	TheScene->addKid(SunAnchor);
+ 
+ 
++	riscosTrace("scene: background (sky, sun)");
++	riscosTraceStage("scene: initBackground");
+ 	initBackground();
++	riscosTrace("scene: background done");
+ 
+ 	grWrldX = (int)(track->max.x - track->min.x + 1);
+ 	grWrldY = (int)(track->max.y - track->min.y + 1);
+@@ -240,7 +243,10 @@ grLoadScene(tTrack *track)
+ 	snprintf(buf, BUFSIZE, "tracks/%s/%s", grTrack->category, grTrack->internalname);
+ 	ssgModelPath(buf);
+ 
++	riscosTrace("scene: track model %s", acname);
++	riscosTraceStage("scene: grssgLoadAC3D (track model and its textures)");
+ 	desc = grssgLoadAC3D(acname, NULL);
++	riscosTrace("scene: track model loaded");
+ 	if (desc == NULL) {
+ 		/* The track's 3D file is missing: addKid(NULL) would crash. */
+ 		GfOut("grscene: no 3D description %s for track %s\n", acname, grTrack->internalname);
+diff --git a/src/modules/graphic/ssggraph/grtexture.cpp b/src/modules/graphic/ssggraph/grtexture.cpp
+index 7cf03ba..3d8c539 100644
+--- a/src/modules/graphic/ssggraph/grtexture.cpp
++++ b/src/modules/graphic/ssggraph/grtexture.cpp
+@@ -97,6 +97,8 @@ bool doMipMap(const char *tfname, int mipmap)
+ // SGI texture loading function.
+ bool grLoadSGI(const char *fname, ssgTextureInfo* info)
+ {
++	riscosTrace("texture %s", fname);
++	riscosTraceStage("texture: reading an SGI image");
+ 	grSGIHeader *sgihdr = new grSGIHeader(fname, info);
+ 	bool returnval = sgihdr->loadSGI_bool;
+ 	delete sgihdr;
+@@ -372,7 +374,13 @@ bool grMakeMipMaps (GLubyte *image, int xsize, int ysize, int zsize, bool mipmap
+ 											GL_RGBA,
+ 									GL_UNSIGNED_BYTE, NULL);
+ 
++			riscosTraceStage("texture: glGetTexLevelParameteriv (proxy)");
+ 			glGetTexLevelParameteriv(GL_PROXY_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &ww);
++			static int proxies;
++			if (proxies++ < 40) {
++				riscosTrace("  %dx%d z%d format %#x: proxy width %d", xsize, ysize, zsize,
++				            (unsigned)textureTargetFormat, (int)ww);
++			}
+ 		}
+ 
+ 		if (ww == 0 && (xsize <= 1 || ysize <= 1)) {
+@@ -416,6 +424,7 @@ bool grMakeMipMaps (GLubyte *image, int xsize, int ysize, int zsize, bool mipmap
+ 		}
+ 
+ 		if (mipmap == TRUE || i == 0) {
++			riscosTraceStage("texture: glTexImage2D (upload)");
+ 			glTexImage2D  ( GL_TEXTURE_2D,
+ 						map_level, textureTargetFormat, w, h, FALSE /* Border */,
+ 								(zsize==1)?GL_LUMINANCE:
+@@ -438,6 +447,7 @@ bool grMakeMipMaps (GLubyte *image, int xsize, int ysize, int zsize, bool mipmap
+ 		map_level++ ;
+ 		delete [] texels[i];
+ 	}
++	riscosTraceStage("texture: uploaded, back in the model loader");
+ 
+ 	return true;
+ }
+diff --git a/src/modules/graphic/ssggraph/grutil.cpp b/src/modules/graphic/ssggraph/grutil.cpp
+index 7f2040d..c068946 100644
+--- a/src/modules/graphic/ssggraph/grutil.cpp
++++ b/src/modules/graphic/ssggraph/grutil.cpp
+@@ -95,6 +95,8 @@ bool grLoadPngTexture (const char *fname, ssgTextureInfo* info)
+ 	int mipmap = 1;
+ 
+ 	TRACE_GL("Load: grLoadPngTexture start");
++	riscosTrace("texture %s", fname);
++	riscosTraceStage("texture: reading a PNG");
+ 
+ 	tex = (GLubyte*)GfImgReadPng(fname, &w, &h, 2.0);
+ 	if (!tex) {

@@ -13,3 +13,4 @@
 0013-RISC-OS-steadier-sound-the-OpenTTD-port-s-fixes.patch
 0014-RISC-OS-a-start-up-and-drawing-trace-TORCS-Trace-and.patch
 0015-RISC-OS-the-texture-size-check-can-t-loop-for-ever-r.patch
+0016-RISC-OS-the-trace-follows-race-loading-texture-by-te.patch

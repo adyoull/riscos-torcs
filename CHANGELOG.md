@@ -12,7 +12,10 @@
   stage, the first frames and every hundredth, menu screens and sound to
   the log, and a watchdog thread writes where TORCS was if it stops
   making progress for 5 seconds. `*Set TORCS$NoSound 1` starts no sound
-  at all (OpenAL isn't started). Both are off unless set.
+  at all (OpenAL isn't started). Both are off unless set. Patch 0016 adds
+  the race loading: each loading-screen message, the scene's steps and
+  each texture. `TRACE=1 build/package.sh` makes a test zip with the
+  trace on.
 - Linked with riscos-mesa 20.3.5-19 (was 20.3.5-18): where the RISC3D
   module has a driver (RISC OS on Linux with riscos-risc3d on a Pi 4),
   OpenGL is drawn by the GPU; `LIBGL_ALWAYS_SOFTWARE` keeps it in software.
