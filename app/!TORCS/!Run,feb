@@ -37,6 +37,13 @@ Set TORCS$Log /|<Wimp$ScrapDir>/TORCSLog
 Unset TORCS$Options
 | Set TORCS$Options -M
 
+| For reports (*Set them before starting TORCS, or take the | off here):
+|   TORCS$Trace    writes each start-up stage and frame to the log, and
+|                  where TORCS was if it stops making progress
+|   TORCS$NoSound  no sound at all (OpenAL isn't started)
+| Set TORCS$Trace 1
+| Set TORCS$NoSound 1
+
 | The program (about 20 MB) is loaded into the slot; its heap goes in
 | dynamic areas ("TORCS Heap").
 WimpSlot -min 24576K -max 24576K

@@ -2,6 +2,17 @@
 
 ## Unreleased (1.3.7-riscos6)
 
+- Starting a race can no longer hang in the texture size check (patch
+  0015): it halved each texture until OpenGL's proxy texture reported a
+  width, and looped for ever if that, or `GL_MAX_TEXTURE_SIZE`, came back
+  0. riscos6test1 locked up at the start of a race under RISC OS on Linux
+  with RISC3D; this is the first suspect, and the trace says if it
+  happens.
+- For reports (patch 0014): `*Set TORCS$Trace 1` writes each start-up
+  stage, the first frames and every hundredth, menu screens and sound to
+  the log, and a watchdog thread writes where TORCS was if it stops
+  making progress for 5 seconds. `*Set TORCS$NoSound 1` starts no sound
+  at all (OpenAL isn't started). Both are off unless set.
 - Linked with riscos-mesa 20.3.5-19 (was 20.3.5-18): where the RISC3D
   module has a driver (RISC OS on Linux with riscos-risc3d on a Pi 4),
   OpenGL is drawn by the GPU; `LIBGL_ALWAYS_SOFTWARE` keeps it in software.

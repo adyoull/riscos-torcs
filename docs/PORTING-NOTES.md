@@ -30,6 +30,8 @@ case riscos-mesa's software renderer handles best.
 | 0011 missing tracks | a race set up for a track that isn't installed runs, for that session, on an installed track of the same category that the race's list doesn't use (Wimp message); with the tracks pack the race types' own lists apply; grscene refuses a NULL 3D model |
 | 0012 crash box | the crash handler also shows the error with Wimp_ReportError |
 | 0013 sound | `ALSOFT_CONF` names the app's `alsoft.conf` (period_size 2048: SDL's RISC OS driver keeps ~140 ms queued; OpenTTD uses 4096) unless set; `sched_yield()` after each frame so the sound thread runs (both from the OpenTTD port) |
+| 0014 trace | `TORCS$Trace`: tgf/riscostrace.cpp logs start-up stages, the first frames and every 100th, menu screens, sound; a watchdog thread logs the last stage after 5 s without progress. `TORCS$NoSound`: no menu music or race sound (OpenAL not started) |
+| 0015 texture check | grMakeMipMaps' proxy-texture loop: a limit ≤ 0 means none, and a texture refused at 1 pixel wide or high loads its smallest level instead of looping for ever; race stages, GL features and each race frame in the trace |
 
 The plib patch (`patches/plib/10-riscos-platform.patch`) adds `UL_RISCOS`: no
 `dlopen`, the ssg context check through EGL, a joystick back end on the

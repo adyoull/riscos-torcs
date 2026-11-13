@@ -1,0 +1,121 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Fri, 13 Nov 2026 18:24:41 +0000
+Subject: [PATCH] RISC OS: the texture size check can't loop for ever; race
+ stages traced
+
+riscos6test1 (mixed, RISC3D on RISC OS on Linux) locked up when a race
+was started. The first thing a race does that the menus don't is load
+its textures through grMakeMipMaps, whose size check loops until
+GL_PROXY_TEXTURE_2D reports a width: halving the texture while the
+proxy says 0 or the size is over the limit. If the proxy query or
+GL_MAX_TEXTURE_SIZE comes back 0 (as it might through a new GL path),
+that loop never ends.
+
+grtexture.cpp: a limit of 0 or less is taken as none (16384); when the
+proxy still refuses at 1 pixel wide or high, the smallest level is
+loaded and the trace says so (the first five times), instead of
+halving to 0 and looping. Halving is traced too (first five).
+
+Trace (TORCS$Trace): the GL features read at start-up
+(GL_MAX_TEXTURE_SIZE, the user limit, texture compression), the race's
+initTrack, initCars, initView, each race frame (refresh) and the texture
+check as a stage.
+---
+ src/libs/tgfclient/glfeatures.cpp          |  2 ++
+ src/modules/graphic/ssggraph/grmain.cpp    |  7 +++++++
+ src/modules/graphic/ssggraph/grtexture.cpp | 22 +++++++++++++++++++++-
+ 3 files changed, 30 insertions(+), 1 deletion(-)
+
+diff --git a/src/libs/tgfclient/glfeatures.cpp b/src/libs/tgfclient/glfeatures.cpp
+index a5c7404..6857729 100644
+--- a/src/libs/tgfclient/glfeatures.cpp
++++ b/src/libs/tgfclient/glfeatures.cpp
+@@ -154,6 +154,8 @@ void checkGLFeatures(void) {
+ 	checkCompressARBEnabled(compressARBEnabled);
+ 	getGLTextureMaxSize(glTextureMaxSize);
+ 	getUserTextureMaxSize(userTextureMaxSize);
++	riscosTrace("GL features: GL_MAX_TEXTURE_SIZE %d, user texture limit %d, texture compression available %d, enabled %d",
++	            glTextureMaxSize, userTextureMaxSize, (int)compressARBAvailable, (int)compressARBEnabled);
+ }
+ 
+ 
+diff --git a/src/modules/graphic/ssggraph/grmain.cpp b/src/modules/graphic/ssggraph/grmain.cpp
+index abff038..bef8278 100644
+--- a/src/modules/graphic/ssggraph/grmain.cpp
++++ b/src/modules/graphic/ssggraph/grmain.cpp
+@@ -231,6 +231,8 @@ int
+ initView(int x, int y, int width, int height, int /* flag */, void *screen)
+ {
+ 	int i;
++	riscosTrace("race: initView %dx%d", width, height);
++	riscosTraceStage("race: initView");
+ 	const int BUFSIZE = 1024;
+ 	char buf[BUFSIZE];
+ 	
+@@ -319,6 +321,7 @@ int
+ refresh(tSituation *s)
+ {
+     int			i;
++    riscosTraceFrame("race: refresh");
+ 
+     START_PROFILE("refresh");
+ 
+@@ -366,6 +369,8 @@ refresh(tSituation *s)
+ int
+ initCars(tSituation *s)
+ {
++	riscosTrace("race: initCars (%d cars)", s->_ncars);
++	riscosTraceStage("race: initCars");
+ 	const int IDXSIZE = 16;
+ 	char idx[IDXSIZE];
+ 	int index;
+@@ -472,6 +477,8 @@ int
+ initTrack(tTrack *track)
+ {
+ 	int i;
++	riscosTrace("race: initTrack");
++	riscosTraceStage("race: initTrack");
+ 
+ 	// The inittrack does as well init the context, that is highly inconsistent, IMHO.
+ 	// TODO: Find a solution to init the graphics first independent of objects.
+diff --git a/src/modules/graphic/ssggraph/grtexture.cpp b/src/modules/graphic/ssggraph/grtexture.cpp
+index 069ca2d..7cf03ba 100644
+--- a/src/modules/graphic/ssggraph/grtexture.cpp
++++ b/src/modules/graphic/ssggraph/grtexture.cpp
+@@ -353,6 +353,12 @@ bool grMakeMipMaps (GLubyte *image, int xsize, int ysize, int zsize, bool mipmap
+ 	}
+ 
+ 	int tlimit = getUserTextureMaxSize();
++	/* RISC OS: no limit known (GL_MAX_TEXTURE_SIZE read as 0): don't
++	   refuse every texture size below. */
++	if (tlimit <= 0) {
++		tlimit = 16384;
++	}
++	riscosTraceStage("race: grMakeMipMaps (proxy texture check)");
+ 
+ 	do {
+ 		if (xsize > tlimit || ysize > tlimit) {
+@@ -369,7 +375,21 @@ bool grMakeMipMaps (GLubyte *image, int xsize, int ysize, int zsize, bool mipmap
+ 			glGetTexLevelParameteriv(GL_PROXY_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &ww);
+ 		}
+ 
+-		if (ww == 0) {
++		if (ww == 0 && (xsize <= 1 || ysize <= 1)) {
++			/* RISC OS: OpenGL refused this texture down to 1 pixel wide or high (the
++			   proxy texture's width is 0): load the 1x1 level rather than
++			   loop here for ever, and say so in the trace. */
++			static int refusedAll;
++			if (refusedAll++ < 5) {
++				riscosTrace("texture refused at every size by GL_PROXY_TEXTURE_2D (format %#x, z %d): loading the smallest level",
++				            (unsigned)textureTargetFormat, zsize);
++			}
++			ww = 1;
++		} else if (ww == 0) {
++			static int shrunk;
++			if (shrunk++ < 5) {
++				riscosTrace("texture %dx%d too big (limit %d, proxy width 0): halving", xsize, ysize, tlimit);
++			}
+ 			delete [] texels[0];
+ 			xsize >>= 1;
+ 			ysize >>= 1;

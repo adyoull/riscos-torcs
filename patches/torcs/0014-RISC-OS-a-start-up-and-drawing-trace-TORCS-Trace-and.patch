@@ -1,0 +1,444 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Fri, 13 Nov 2026 18:22:31 +0000
+Subject: [PATCH] RISC OS: a start-up and drawing trace (TORCS$Trace), and
+ TORCS$NoSound
+
+For finding where TORCS stops (riscos6test1 mixed locked up under RISC OS
+on Linux with RISC3D, straight after the "Visual Properties Report").
+
+tgf/riscostrace.cpp, off unless TORCS$Trace is set:
+- riscosTrace() writes a line to the log with the time since start;
+- riscosTraceStage() notes where the main thread is, without writing;
+- riscosTraceFrame() counts frames (written: the first five, then every
+  hundredth);
+- a watchdog thread writes the last stage if the main thread makes no
+  progress for 5 s, then every 10 s. If the log just stops, the main
+  thread is stuck where even the thread switcher can't run (in a SWI).
+Marked: directories, GfScrInit, glutCreateWindow, the GL strings,
+ssgInit, GfInitClient, the main menu, the splash image, the menu music,
+glutMainLoop, each swap in the splash and GfuiDisplay, the splash
+closing, menu screen changes, the menu music buffer, race sound.
+
+riscosNoSound() (TORCS$NoSound set): no menu music and no race sound, so
+OpenAL isn't started.
+---
+ src/libs/client/entry.cpp                |  10 ++
+ src/libs/client/splash.cpp               |   6 +
+ src/libs/musicplayer/musicplayer.cpp     |   8 +-
+ src/libs/tgf/Makefile                    |   3 +-
+ src/libs/tgf/riscostrace.cpp             | 164 +++++++++++++++++++++++
+ src/libs/tgf/tgf.h                       |  10 ++
+ src/libs/tgfclient/gui.cpp               |   4 +
+ src/libs/tgfclient/screen.cpp            |   3 +
+ src/linux/main.cpp                       |   8 ++
+ src/linux/riscosplatform.cpp             |   1 +
+ src/modules/graphic/ssggraph/grsound.cpp |   5 +
+ 11 files changed, 218 insertions(+), 4 deletions(-)
+ create mode 100644 src/libs/tgf/riscostrace.cpp
+
+diff --git a/src/libs/client/entry.cpp b/src/libs/client/entry.cpp
+index 5b7b185..589e5c0 100644
+--- a/src/libs/client/entry.cpp
++++ b/src/libs/client/entry.cpp
+@@ -45,13 +45,23 @@
+ void
+ TorcsEntry(void)
+ {
++	riscosTraceStage("ssgInit");
+ 	ssgInit();
++	riscosTrace("ssgInit done");
+ 
++	riscosTraceStage("GfInitClient");
+ 	GfInitClient();
++	riscosTrace("GfInitClient done");
+ 
++	riscosTraceStage("TorcsMainMenuInit");
+ 	TorcsMainMenuInit();
++	riscosTrace("main menu made");
+ 
++	riscosTraceStage("SplashScreen");
+ 	SplashScreen();
++	riscosTrace("splash image loaded");
+ 	
++	riscosTraceStage("startMenuMusic");
+ 	startMenuMusic();
++	riscosTrace("menu music %s", riscosNoSound() ? "off (TORCS$NoSound)" : "started (if enabled)");
+ }
+diff --git a/src/libs/client/splash.cpp b/src/libs/client/splash.cpp
+index 3449e6a..261cc2c 100644
+--- a/src/libs/client/splash.cpp
++++ b/src/libs/client/splash.cpp
+@@ -59,6 +59,7 @@ static void splashKey( unsigned char /* key */, int /* x */, int /* y */)
+ 	SplashDisplaying = 0;
+ 	glDeleteTextures(1, &s_texture);
+ 	s_texture = 0;
++	riscosTrace("splash closed: main menu");
+ 	TorcsMainMenuRun();
+ }
+ 
+@@ -84,6 +85,7 @@ static void splashTimer(int /* value */)
+ 		SplashDisplaying = 0;
+ 		glDeleteTextures(1, &s_texture);
+ 		s_texture = 0;
++		riscosTrace("splash closed: main menu");
+ 		TorcsMainMenuRun();
+ 	}
+ }
+@@ -110,6 +112,7 @@ static void splashDisplay( void )
+ 	int	ScrW, ScrH, ViewW, ViewH;
+ 	
+ 	SplashDisplaying = 1;
++	riscosTraceFrame("splash: drawing");
+ 		
+ 	glDisable(GL_DEPTH_TEST);
+ 	glDisable(GL_LIGHTING);
+@@ -165,7 +168,9 @@ static void splashDisplay( void )
+ 	GfuiPrintString(VERSION, grWhite, GFUI_FONT_SMALL_C, 640-8, 8, GFUI_ALIGN_HR_VB);
+ #endif
+ 
++	riscosTraceStage("splash: glutSwapBuffers");
+ 	glutSwapBuffers();
++	riscosTraceStage("splash: swapped, back in glutMainLoop");
+ }
+ 
+ static void splashMouse(int /* b */, int s, int /* x */, int /* y */)
+@@ -174,6 +179,7 @@ static void splashMouse(int /* b */, int s, int /* x */, int /* y */)
+ 		SplashDisplaying = 0;
+ 		glDeleteTextures(1, &s_texture);
+ 		s_texture = 0;
++		riscosTrace("splash closed: main menu");
+ 		TorcsMainMenuRun();
+ 	}
+ }
+diff --git a/src/libs/musicplayer/musicplayer.cpp b/src/libs/musicplayer/musicplayer.cpp
+index c6d837a..f23a78a 100644
+--- a/src/libs/musicplayer/musicplayer.cpp
++++ b/src/libs/musicplayer/musicplayer.cpp
+@@ -17,8 +17,8 @@
+  *                                                                         *
+  ***************************************************************************/
+ 
+-#include "musicplayer.h"
+-
++#include "musicplayer.h"
++
+ #include <GL/glut.h>
+ #include <string.h>
+ #include <tgf.h>
+@@ -71,6 +71,7 @@ static void playMenuMusic(int /* value */)
+ 	const int nextcallinms = 100;
+ 	
+ 	OpenALMusicPlayer* player = getMusicPlayer();
++	riscosTraceStage("menu music: playAndManageBuffer");
+ 	if (player->playAndManageBuffer()) {
+ 		glutTimerFunc(nextcallinms, playMenuMusic, 0);
+ 	}
+@@ -79,7 +80,8 @@ static void playMenuMusic(int /* value */)
+ 
+ void startMenuMusic()
+ {
+-	if (isEnabled()) {
++	/* RISC OS: TORCS$NoSound leaves OpenAL out (riscostrace.cpp). */
++	if (!riscosNoSound() && isEnabled()) {
+ 		OpenALMusicPlayer* player = getMusicPlayer();
+ 		player->start();
+ 		playMenuMusic(0);
+diff --git a/src/libs/tgf/Makefile b/src/libs/tgf/Makefile
+index b7e8535..a9db5ab 100644
+--- a/src/libs/tgf/Makefile
++++ b/src/libs/tgf/Makefile
+@@ -27,7 +27,8 @@ SOURCES   = 	module.cpp \
+ 		trace.cpp \
+ 		directory.cpp \
+ 		profiler.cpp \
+-		hash.cpp
++		hash.cpp \
++		riscostrace.cpp
+ 
+ 
+ EXPDIR  = include
+diff --git a/src/libs/tgf/riscostrace.cpp b/src/libs/tgf/riscostrace.cpp
+new file mode 100644
+index 0000000..ac10ed3
+--- /dev/null
++++ b/src/libs/tgf/riscostrace.cpp
+@@ -0,0 +1,164 @@
++/***************************************************************************
++
++    file                 : riscostrace.cpp
++    RISC OS port (riscos-torcs): a trace of start-up and drawing, written
++    to the log (stdout, TORCS$Log), for finding where TORCS stops.
++    (C) 2026 Andrew Youll
++
++    Off unless the variable TORCS$Trace is set (to anything). Then:
++    - riscosTrace() writes a line with the time since start (seconds);
++    - riscosTraceStage() notes where the main thread is (not written);
++    - riscosTraceFrame() counts frames, writing the first five and every
++      hundredth;
++    - a watchdog thread writes where the main thread last was if it has
++      made no progress for 5 seconds, and again every 10 seconds. If the
++      main thread is stuck inside a SWI, the watchdog can't run either,
++      so the log then just stops at the last stage.
++    riscosNoSound() is true if TORCS$NoSound is set: the menu music and
++    the race sound are then left off (OpenAL isn't started).
++
++ ***************************************************************************/
++
++/***************************************************************************
++ *                                                                         *
++ *   This program is free software; you can redistribute it and/or modify  *
++ *   it under the terms of the GNU General Public License as published by  *
++ *   the Free Software Foundation; either version 2 of the License, or     *
++ *   (at your option) any later version.                                   *
++ *                                                                         *
++ ***************************************************************************/
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <stdarg.h>
++#include <pthread.h>
++#include <unistd.h>
++#include <time.h>
++#ifdef __riscos__
++#include <kernel.h>
++#endif
++
++#include "tgf.h"
++
++int riscosTraceOn = 0;
++
++static volatile unsigned traceSeq;		/* changes whenever the main thread reports */
++static const char * volatile traceStage = "start";
++static volatile unsigned traceFrames;
++static unsigned traceStart;
++
++/* Centiseconds. */
++static unsigned
++traceNow(void)
++{
++#ifdef __riscos__
++	_kernel_swi_regs r;
++	_kernel_swi(0x42 /* OS_ReadMonotonicTime */, &r, &r);
++	return (unsigned)r.r[0];
++#else
++	struct timespec ts;
++	clock_gettime(CLOCK_MONOTONIC, &ts);
++	return (unsigned)(ts.tv_sec * 100 + ts.tv_nsec / 10000000);
++#endif
++}
++
++static void
++traceLine(const char *fmt, va_list ap)
++{
++	unsigned t = traceNow() - traceStart;
++	char line[300];
++	vsnprintf(line, sizeof(line), fmt, ap);
++	printf("[trace %u.%02u] %s\n", t / 100, t % 100, line);
++	fflush(stdout);
++}
++
++void
++riscosTrace(const char *fmt, ...)
++{
++	if (!riscosTraceOn) {
++		return;
++	}
++	va_list ap;
++	va_start(ap, fmt);
++	traceLine(fmt, ap);
++	va_end(ap);
++	traceSeq++;
++}
++
++static void
++traceWatchdogLine(const char *fmt, ...)
++{
++	va_list ap;
++	va_start(ap, fmt);
++	traceLine(fmt, ap);
++	va_end(ap);
++}
++
++void
++riscosTraceStage(const char *stage)
++{
++	traceStage = stage;
++	traceSeq++;
++}
++
++void
++riscosTraceFrame(const char *where)
++{
++	unsigned n = ++traceFrames;
++	traceStage = where;
++	traceSeq++;
++	if (riscosTraceOn && (n <= 5 || n % 100 == 0)) {
++		riscosTrace("%s: frame %u", where, n);
++	}
++}
++
++static void *
++traceWatchdog(void *)
++{
++	unsigned last = traceSeq, still = 0;
++	for (;;) {
++		sleep(1);
++		if (traceSeq != last) {
++			last = traceSeq;
++			still = 0;
++			continue;
++		}
++		still++;
++		if (still == 5 || (still > 5 && still % 10 == 5)) {
++			traceWatchdogLine("watchdog: no progress for %u s; the main thread was last at: %s (%u frames)",
++			                  still, traceStage, traceFrames);
++		}
++	}
++	return NULL;
++}
++
++void
++riscosTraceInit(void)
++{
++	const char *v = getenv("TORCS$Trace");
++	if (v == NULL || *v == 0) {
++		return;
++	}
++	riscosTraceOn = 1;
++	traceStart = traceNow();
++	riscosTrace("trace on (TORCS$Trace)%s", riscosNoSound() ? "; sound off (TORCS$NoSound)" : "");
++	pthread_t t;
++	pthread_attr_t a;
++	pthread_attr_init(&a);
++	pthread_attr_setdetachstate(&a, PTHREAD_CREATE_DETACHED);
++	if (pthread_create(&t, &a, traceWatchdog, NULL) != 0) {
++		riscosTrace("no watchdog thread");
++	}
++	pthread_attr_destroy(&a);
++}
++
++int
++riscosNoSound(void)
++{
++	static int noSound = -1;
++	if (noSound < 0) {
++		const char *v = getenv("TORCS$NoSound");
++		noSound = (v != NULL && *v != 0);
++	}
++	return noSound;
++}
+diff --git a/src/libs/tgf/tgf.h b/src/libs/tgf/tgf.h
+index 509d8ce..d4cd9eb 100644
+--- a/src/libs/tgf/tgf.h
++++ b/src/libs/tgf/tgf.h
+@@ -623,6 +623,16 @@ void GfHashRelease(void *hash, tfHashFree hashFree);
+ const void *GfHashGetFirst(void *hash);
+ const void *GfHashGetNext(void *hash);
+ 
++/* RISC OS port: a trace of start-up and drawing in the log, on when
++   TORCS$Trace is set; riscosNoSound() when TORCS$NoSound is set
++   (riscostrace.cpp). Stages and frame names must be string constants. */
++extern int riscosTraceOn;
++extern void riscosTraceInit(void);
++extern void riscosTrace(const char *fmt, ...);
++extern void riscosTraceStage(const char *stage);
++extern void riscosTraceFrame(const char *where);
++extern int riscosNoSound(void);
++
+ #define GF_DIR_CREATION_FAILED 0
+ #define GF_DIR_CREATED 1
+ 
+diff --git a/src/libs/tgfclient/gui.cpp b/src/libs/tgfclient/gui.cpp
+index 09e0248..2eecf7c 100644
+--- a/src/libs/tgfclient/gui.cpp
++++ b/src/libs/tgfclient/gui.cpp
+@@ -212,7 +212,9 @@ GfuiDisplay(void)
+ 	}
+ 
+ 	glDisable(GL_BLEND);
++	riscosTraceFrame("GfuiDisplay: glutSwapBuffers");
+ 	glutSwapBuffers();
++	riscosTraceStage("GfuiDisplay: swapped");
+ #ifdef __riscos__
+ 	/* TORCS never waits between frames. Let the sound thread (OpenAL
+ 	   mixing in SDL's audio thread) run after every frame, as the RISC OS
+@@ -478,6 +480,8 @@ GfuiScreenActivate(void *screen)
+ 	if ((GfuiScreen) && (GfuiScreen->onDeactivate)) GfuiScreen->onDeactivate(GfuiScreen->userDeactData);
+ 	
+ 	GfuiScreen = (tGfuiScreen*)screen;
++	riscosTrace("menu screen %p", screen);
++	riscosTraceStage("GfuiScreenActivate (onActivate)");
+ 	
+ 	glutKeyboardFunc(gfuiKeyboard);
+ 	glutSpecialFunc(gfuiSpecial);
+diff --git a/src/libs/tgfclient/screen.cpp b/src/libs/tgfclient/screen.cpp
+index c1ff2e3..333b441 100644
+--- a/src/libs/tgfclient/screen.cpp
++++ b/src/libs/tgfclient/screen.cpp
+@@ -408,7 +408,10 @@ void GfScrInit(int argc, char *argv[])
+ 		/* RISC OS: no position, so freeglut opens the window near the
+ 		   centre of the screen (at 0,0 the title bar would be off the top). */
+ 		glutInitWindowSize(winX, winY);
++		riscosTrace("glutCreateWindow %dx%d", winX, winY);
++		riscosTraceStage("glutCreateWindow");
+ 		Window = glutCreateWindow(argv[0]);
++		riscosTrace("window created");
+ 		if (!Window) {
+ 			printf("Error, couldn't open window\n");
+ 			GfScrShutdown();
+diff --git a/src/linux/main.cpp b/src/linux/main.cpp
+index e516b62..f0fbb50 100644
+--- a/src/linux/main.cpp
++++ b/src/linux/main.cpp
+@@ -148,14 +148,22 @@ main(int argc, char *argv[])
+ 	}
+ 	RiscosSpecInit();			/* statically linked modules */
+ 	RiscosSetupDirs();			/* <TORCS$Dir>, <Choices$Write>.TORCS */
++	riscosTrace("directories set up");
+ #else
+ 	init_args(argc, argv, &raceconfig);
+ 	LinuxSpecInit();			/* init specific linux functions */
+ #endif
+ 
+ 	if(strlen(raceconfig) == 0) {
++		riscosTraceStage("GfScrInit");
+ 		GfScrInit(argc, argv);	/* init screen */
++		riscosTrace("screen set up: GL_VENDOR %s; GL_RENDERER %s; GL_VERSION %s",
++		            (const char *)glGetString(GL_VENDOR), (const char *)glGetString(GL_RENDERER),
++		            (const char *)glGetString(GL_VERSION));
++		riscosTraceStage("TorcsEntry");
+ 		TorcsEntry();			/* launch TORCS */
++		riscosTrace("start-up done: glutMainLoop");
++		riscosTraceStage("glutMainLoop (before the first frame)");
+ 		glutMainLoop();			/* event loop of glut */
+ 	} else {
+ 		// Run race from console, no Window, no OpenGL/OpenAL etc.
+diff --git a/src/linux/riscosplatform.cpp b/src/linux/riscosplatform.cpp
+index 566b1c4..543349f 100644
+--- a/src/linux/riscosplatform.cpp
++++ b/src/linux/riscosplatform.cpp
+@@ -103,6 +103,7 @@ RiscosPlatformInit(int /* argc */, char ** /* argv */)
+ 	signal(SIGILL, riscosErrorReport);
+ 	signal(SIGFPE, riscosErrorReport);
+ #endif
++	riscosTraceInit();	/* TORCS$Trace */
+ }
+ 
+ /* mkdir -p for UnixLib paths such as "/<Choices$Write>/TORCS/config/".
+diff --git a/src/modules/graphic/ssggraph/grsound.cpp b/src/modules/graphic/ssggraph/grsound.cpp
+index ea34a55..fdf33c5 100644
+--- a/src/modules/graphic/ssggraph/grsound.cpp
++++ b/src/modules/graphic/ssggraph/grsound.cpp
+@@ -68,6 +68,11 @@ void grInitSound(tSituation* s, int ncars)
+ 	//printf ("vol:%f\n", global_volume);
+ 	GfParmReleaseHandle(paramHandle);
+ 	paramHandle = NULL;
++	/* RISC OS: TORCS$NoSound leaves OpenAL out (riscostrace.cpp). */
++	if (riscosNoSound()) {
++		sound_mode = DISABLED;
++	}
++	riscosTrace("race sound: %s", sound_mode == DISABLED ? "off" : "on");
+ 
+ 	lastUpdated = -1000.0;
+ 	
