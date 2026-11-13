@@ -33,7 +33,7 @@
   `riscos/mixed-run`. The program is 4 MB against 13.5 MB.
 - Built with riscos-crossdev 1.11 (UnixLib 5.0.3.7), as riscos-mesa
   20.3.5-19 is, and with its PThreadTicker 0.04 (`!Run` loads 0.04 or
-  later).
+  later, and stops with an error if an older one is already loaded).
 - The GitHub build makes and checks both (`check-mixed-package.sh` against
   the devkit's !MesaLibs).
 

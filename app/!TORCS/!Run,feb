@@ -13,6 +13,7 @@ RMEnsure ARMEABISupport 0 Error TORCS needs the ARMEABISupport module. Install i
 | must be loaded before the program starts.
 RMEnsure PThreadTicker 0.04 IfThere System:Modules.PThrTicker Then RMLoad System:Modules.PThrTicker
 RMEnsure PThreadTicker 0.04 RMLoad <TORCS$Dir>.PThrTicker
+RMEnsure PThreadTicker 0.04 Error TORCS needs PThreadTicker 0.04 or later (an older one is loaded: restart the machine, or *RMKill PThreadTicker if nothing else is using it)
 | Sound (OpenAL through SDL) goes through SharedSoundBuffer, StreamManager
 | and SharedSound (in !System), mixed with other programs' sound.
 | SharedSoundBuffer and StreamManager are in ssb.zip from
