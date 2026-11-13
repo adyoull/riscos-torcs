@@ -11,8 +11,8 @@ RMEnsure ARMEABISupport 0 IfThere System:Modules.ARMEABISupport Then RMLoad Syst
 RMEnsure ARMEABISupport 0 Error TORCS needs the ARMEABISupport module. Install it with PackMan.
 | UnixLib's thread timer module: the sound (OpenAL) runs in a thread. It
 | must be loaded before the program starts.
-RMEnsure PThreadTicker 0.03 IfThere System:Modules.PThrTicker Then RMLoad System:Modules.PThrTicker
-RMEnsure PThreadTicker 0.03 RMLoad <TORCS$Dir>.PThrTicker
+RMEnsure PThreadTicker 0.04 IfThere System:Modules.PThrTicker Then RMLoad System:Modules.PThrTicker
+RMEnsure PThreadTicker 0.04 RMLoad <TORCS$Dir>.PThrTicker
 | Sound (OpenAL through SDL) goes through SharedSoundBuffer, StreamManager
 | and SharedSound (in !System), mixed with other programs' sound.
 | SharedSoundBuffer and StreamManager are in ssb.zip from
