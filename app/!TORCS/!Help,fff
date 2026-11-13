@@ -2,7 +2,7 @@ TORCS - The Open Racing Car Simulator, for RISC OS
 ===================================================
 
 TORCS 1.3.7 (Debian's free-software source), ported to RISC OS by Andrew
-Youll (riscos-torcs), release 1.3.7-riscos5. AI (Anthropic's Claude) has
+Youll (riscos-torcs), release 1.3.7-riscos6. AI (Anthropic's Claude) has
 been used as a coding assistant on this port.
 
 Requirements
@@ -13,9 +13,17 @@ Requirements
   SharedSoundBuffer (ssb.zip from orac.co.uk). Without them TORCS is
   silent.
 - About 64 MB of free memory.
+- The "mixed" download only: !SharedLibs with ld-riscos/so/2 (GCCSDK 8 or
+  later, as in Iris) and !MesaLibs (riscos-mesa 20.3.5-19 or later), both
+  in !Boot.Resources. Its program is much smaller, and it shares the
+  OpenGL, SDL and OpenAL libraries with other programs that use
+  !MesaLibs. After installing a new !MesaLibs, restart the machine.
 
-Everything is drawn by software OpenGL (riscos-mesa) on the CPU, so the
-fewer pixels it draws, the faster it runs. TORCS opens in a desktop
+Where the RISC3D module has a driver (today RISC OS on Linux with the
+riscos-risc3d package, on a Raspberry Pi 4), TORCS draws with the GPU.
+*Set LIBGL_ALWAYS_SOFTWARE 1 before starting it keeps it in software.
+Everywhere else everything is drawn by software OpenGL (riscos-mesa) on
+the CPU, so the fewer pixels it draws, the faster it runs. TORCS opens in a desktop
 window 540 pixels high, in the screen's shape (960x540 on a 16:9
 screen). It can also run full screen (see Options): the picture is then
 drawn at the same reduced size and stretched over the screen, by the

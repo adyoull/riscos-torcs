@@ -8,14 +8,14 @@ The easy way is riscos-crossdev's container image, which has everything
 (the version is the `riscos-crossdev` line of `.riscos-deps`):
 
 ```sh
-docker run --rm -v "$PWD":/src ghcr.io/adyoull/riscos-crossdev:1.10 sh -c \
+docker run --rm -v "$PWD":/src ghcr.io/adyoull/riscos-crossdev:1.11 sh -c \
   'build/fetch.sh && build/build-deps.sh && build/build-torcs.sh && build/package.sh test'
 ```
 
 Without Docker:
 
-- **riscos-crossdev's toolchain** (GCCSDK GCC 10.2, UnixLib 5.0.3.3, static
-  only, `elf2aif`, `qemu-arm-aligntrap`): the release named in
+- **riscos-crossdev's toolchain** (GCCSDK GCC 10.2, UnixLib 5.0.3.7,
+  `elf2aif`, `qemu-arm-aligntrap`, the mixed-program stand-ins): the release named in
   `.riscos-deps` (its `toolchain/PREBUILT` names the tarball), installed
   with its `make prebuilt` or unpacked anywhere; set `RISCOS_TOOLCHAIN` to
   it. (Unpacked by hand, run its `toolchain/relocate.sh` once.)
@@ -37,6 +37,19 @@ build/build-deps.sh       # libpng, ogg, vorbis, freealut, plib -> work/stage
 build/build-torcs.sh      # TORCS -> work/torcs/src/linux/torcs (ELF)
 TRACKS_PACK=TORCS-tracks-1.3.7 build/package.sh 1.3.7-riscosN   # -> dist/TORCS-1.3.7-riscosN.zip
 ```
+
+For the mixed build as well (riscos-mesa 20.3.5-19 or later, riscos-crossdev
+1.11 or later):
+
+```sh
+MIXED=1 build/build-torcs.sh   # also work/torcs/src/linux/torcs-mixed
+MIXED=1 build/package.sh 1.3.7-riscosN   # -> dist/TORCS-1.3.7-riscosN-mixed.zip
+build/check-mixed.sh           # riscos-crossdev check-all and check-mixed-package (RCD_DIR)
+```
+
+The mixed program loads OpenGL, EGL, GLU, freeglut, SDL 2 and OpenAL from
+!MesaLibs (riscos-mesa's `docs/porting/mixed.md`); everything else is linked
+in. `riscos/mixed-run` replaces the end of `!Run` in its package.
 
 `WORK` (default `./work`) holds the sources, the staged libraries and the build;
 `DL` (default `$WORK/dl`) the tarballs. A full build takes about five minutes on

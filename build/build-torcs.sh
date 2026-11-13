@@ -5,7 +5,8 @@
 #      module (graphics, physics, track, robots) as one partly-linked object
 #      with only its entry points global (see Make-default.mk);
 #   2. the module table (riscos_modtab.cpp) for riscosspec.cpp;
-#   3. the final static link: $TORCS_SRC/src/linux/torcs (ELF).
+#   3. the final static link: $TORCS_SRC/src/linux/torcs (ELF), and with
+#      MIXED=1 also the mixed program src/linux/torcs-mixed.
 # Re-running is safe: make carries on where it stopped.
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
@@ -68,3 +69,28 @@ arm-riscos-gnueabihf-g++ -static $ULIB -o src/linux/torcs \
 grep -o '[^ (]*libunixlib\.a' src/linux/torcs.map | sort -u | sed 's/^/UnixLib: /'
 python3 "$RT_DIR/tools/check-stack-probes.py" src/linux/torcs
 ls -l src/linux/torcs
+
+# --- MIXED=1: also a mixed program, src/linux/torcs-mixed ---
+# The same objects, with UnixLib, libstdc++ and the game's own libraries
+# (plib, freealut, libpng, Ogg Vorbis, zlib) linked in, but OpenGL, EGL,
+# GLU, freeglut, SDL 2 and OpenAL loaded from !MesaLibs at run time
+# (riscos-mesa's docs/porting/mixed.md, riscos-crossdev's docs/MIXED.md).
+# lib/shared comes before lib, so those six are found as shared libraries;
+# zlib has no shared library (libOSMesa's copy is hidden), so libz.a is
+# linked in. SDL's dlopen needs -ldl (the toolchain's stub).
+if [ -n "${MIXED:-}" ]; then
+  [ -d "$RISCOS_DEVKIT/lib/shared" ] ||
+    { echo "MIXED: the devkit has no lib/shared (riscos-mesa 20.3.5-19 or later)" >&2; exit 1; }
+  STUBS=$(arm-riscos-gnueabihf-gcc -print-file-name=mixed-stubs)
+  arm-riscos-gnueabihf-g++ -rdynamic -Wl,-rpath-link="$STUBS" -o src/linux/torcs-mixed \
+    src/linux/main.o src/linux/riscosspec.o src/linux/riscosplatform.o src/linux/riscos_modtab.o \
+    $MODOBJS \
+    -Lexport/lib -L"$STAGE/lib" -L"$RISCOS_DEVKIT/lib/shared" -L"$RISCOS_DEVKIT/lib" \
+    -Wl,--start-group $TLIBS -Wl,--end-group \
+    -lplibssgaux -lplibssg -lplibsg -lplibsl -lplibsm -lplibjs -lplibul \
+    -lglut -lGLU -lalut -lopenal -lSDL2 -lEGL -lOSMesa \
+    -lvorbisfile -lvorbis -logg -lpng16 -lz -ldl -lm \
+    -Wl,-Map=src/linux/torcs-mixed.map
+  python3 "$RT_DIR/tools/check-stack-probes.py" src/linux/torcs-mixed
+  ls -l src/linux/torcs-mixed
+fi

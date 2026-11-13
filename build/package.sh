@@ -3,6 +3,8 @@
 # the game data installed by TORCS's own "make install datainstall", the
 # RISC OS default settings and the program as an Absolute file).
 #   build/package.sh VERSION      (after build/build-torcs.sh)
+# MIXED=1 packs the mixed program instead (dist/TORCS-<version>-mixed.zip;
+# needs MIXED=1 build/build-torcs.sh first).
 # TRACKS: the tracks to include (category/name ...), default a set of 9;
 # TRACKS=all for every track (about 435 MB). TRACKS_PACK=NAME also makes
 # dist/NAME.zip with all the other tracks (the tracks pack).
@@ -49,14 +51,34 @@ L="$APP/Licences"; mkdir -p "$L"
 cp "$TORCS_SRC/COPYING" "$L/COPYING"
 cp "$RT_DIR/riscos/licences/"* "$L/"
 
-# --- the program: an Absolute (AIF) file, so it needs no ELF loader ---
-arm-riscos-gnueabihf-strip -o "$STAGE_PKG/torcs.elf" "$TORCS_SRC/src/linux/torcs"
-elf2aif -e "$STAGE_PKG/torcs.elf" "$APP/!RunImage,ff8"
-rm "$STAGE_PKG/torcs.elf"
+if [ -z "${MIXED:-}" ]; then
+  # --- the program: an Absolute (AIF) file, so it needs no ELF loader ---
+  arm-riscos-gnueabihf-strip -o "$STAGE_PKG/torcs.elf" "$TORCS_SRC/src/linux/torcs"
+  elf2aif -e "$STAGE_PKG/torcs.elf" "$APP/!RunImage,ff8"
+  rm "$STAGE_PKG/torcs.elf"
+  PROG="$APP/!RunImage,ff8"; ZIP=TORCS-$VERSION
+else
+  # --- MIXED=1: the mixed program (build-torcs.sh MIXED=1), which loads
+  # OpenGL, EGL, GLU, freeglut, SDL 2 and OpenAL from !MesaLibs. It stays
+  # an ELF file (&E1F, run by !SharedLibs), named TORCS so its loader
+  # variable is TORCS$LD$Env. !Run's last lines are replaced
+  # (riscos/mixed-run). ---
+  [ -f "$TORCS_SRC/src/linux/torcs-mixed" ] ||
+    { echo "MIXED: no src/linux/torcs-mixed (run MIXED=1 build/build-torcs.sh)" >&2; exit 1; }
+  arm-riscos-gnueabihf-strip -o "$APP/TORCS,e1f" "$TORCS_SRC/src/linux/torcs-mixed"
+  python3 - "$APP/!Run,feb" "$RT_DIR/riscos/mixed-run" <<'PY'
+import sys
+run, add = sys.argv[1], open(sys.argv[2]).read()
+s = open(run).read()
+cut = s.index("| The program (about 20 MB)")
+open(run, "w").write(s[:cut] + add)
+PY
+  PROG="$APP/TORCS,e1f"; ZIP=TORCS-$VERSION-mixed
+fi
 
-if grep -rqa "$WORK" "$APP/!RunImage,ff8"; then echo "build path found in the program" >&2; exit 1; fi
-mkdir -p "$OUT"; rm -f "$OUT/TORCS-$VERSION.zip"
-python3 "$RISCOS_DEVKIT/bin/mkrozip.py" "$OUT/TORCS-$VERSION.zip" "$APP"
+if grep -rqa "$WORK" "$PROG"; then echo "build path found in the program" >&2; exit 1; fi
+mkdir -p "$OUT"; rm -f "$OUT/$ZIP.zip"
+python3 "$RISCOS_DEVKIT/bin/mkrozip.py" "$OUT/$ZIP.zip" "$APP"
 du -sh "$APP"
 
 # --- the tracks pack: every track not in the application, in a zip whose
@@ -79,4 +101,4 @@ if [ "$TRACKS" != all ] && [ -n "${TRACKS_PACK:-}" ]; then
   ls -l "$OUT/$TRACKS_PACK.zip"; md5sum "$OUT/$TRACKS_PACK.zip"
 fi
 rm -rf "$STAGE_PKG"
-ls -l "$OUT/TORCS-$VERSION.zip"; md5sum "$OUT/TORCS-$VERSION.zip"
+ls -l "$OUT/$ZIP.zip"; md5sum "$OUT/$ZIP.zip"

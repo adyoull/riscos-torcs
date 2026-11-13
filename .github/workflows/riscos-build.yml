@@ -20,7 +20,7 @@ env:
   # the libraries and TORCS, run riscos-crossdev's checks on the program,
   # make the zip, then race the ARM Linux build under QEMU's RISC OS
   # alignment rules (tests/qemu)
-  BUILD: build/fetch.sh && build/build-deps.sh && build/build-torcs.sh && "$RCD_DIR/checks/check-all.sh" work/torcs/src/linux/torcs && build/package.sh ci && tests/qemu/build.sh && tests/qemu/run.sh forza road 1
+  BUILD: build/fetch.sh && build/build-deps.sh && MIXED=1 build/build-torcs.sh && "$RCD_DIR/checks/check-all.sh" work/torcs/src/linux/torcs && build/check-mixed.sh && build/package.sh ci && MIXED=1 build/package.sh ci && tests/qemu/build.sh && tests/qemu/run.sh forza road 1
   ARTIFACTS: dist/*.zip
   PACKAGES: ""                   # e.g. "python3-pil shared-mime-info"
 

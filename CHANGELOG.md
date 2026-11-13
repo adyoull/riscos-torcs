@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased (1.3.7-riscos6)
+
+- Linked with riscos-mesa 20.3.5-19 (was 20.3.5-18): where the RISC3D
+  module has a driver (RISC OS on Linux with riscos-risc3d on a Pi 4),
+  OpenGL is drawn by the GPU; `LIBGL_ALWAYS_SOFTWARE` keeps it in software.
+  Elsewhere drawing is the same as before.
+- A mixed build as well as the static one: `MIXED=1 build/build-torcs.sh`
+  links `src/linux/torcs-mixed` (UnixLib, libstdc++, plib, freealut,
+  libpng, Ogg Vorbis and zlib linked in; OpenGL, EGL, GLU, freeglut, SDL 2
+  and OpenAL from !MesaLibs), and `MIXED=1 build/package.sh` makes
+  `TORCS-<version>-mixed.zip`, with `TORCS,e1f` and the `!Run` ending in
+  `riscos/mixed-run`. The program is 4 MB against 13.5 MB.
+- Built with riscos-crossdev 1.11 (UnixLib 5.0.3.7), as riscos-mesa
+  20.3.5-19 is.
+- The GitHub build makes and checks both (`check-mixed-package.sh` against
+  the devkit's !MesaLibs).
+
 ## 1.3.7-riscos5 (2026-11-04)
 
 - Steadier sound, with the RISC OS OpenTTD port's fixes:

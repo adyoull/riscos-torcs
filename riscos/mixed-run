@@ -1,0 +1,23 @@
+| The mixed build: TORCS (an ELF program, run by !SharedLibs) has UnixLib
+| inside it but loads OpenGL, EGL, GLU, freeglut, SDL 2 and OpenAL from
+| !MesaLibs, shared with other programs. Where the RISC3D module has a
+| driver (RISC OS on Linux with riscos-risc3d), they draw with the GPU.
+| It needs !SharedLibs with ld-riscos/so/2 (GCCSDK 8 or later, as in Iris)
+| and !MesaLibs (riscos-mesa 20.3.5-19 or later), both in !Boot.Resources.
+If "<SharedLibs$Dir>" = "" Then IfThere Boot:Resources.!SharedLibs.!Boot Then Run Boot:Resources.!SharedLibs.!Boot
+If "<MesaLibs$Dir>" = "" Then IfThere Boot:Resources.!MesaLibs.!Boot Then Run Boot:Resources.!MesaLibs.!Boot
+Unset TORCS$SO2
+IfThere SharedLibs:lib.ld-riscos-eabihf/so Then Set TORCS$SO2 1
+If "<TORCS$SO2>" = "" Then Error TORCS needs a !SharedLibs with ld-riscos/so/2 (GCCSDK 8 or later, as in Iris) in !Boot.Resources
+Unset TORCS$SO2
+If "<MesaLibs$Dir>" = "" Then Error TORCS needs !MesaLibs (riscos-mesa 20.3.5-19 or later) in !Boot.Resources
+| Where the loader finds the libraries.
+Set TORCS$LD$Env "LD_LIBRARY_PATH=/MesaLibs:"
+| *Set LIBGL_ALWAYS_SOFTWARE 1 before starting TORCS draws in software
+| even where RISC3D could use the GPU (it applies to every OpenGL program
+| until *Unset).
+
+| The program is loaded into the slot; its heap goes in dynamic areas.
+WimpSlot -min 16000K -max 16000K
+| Do: Run doesn't expand <variables> in its arguments.
+Do Run <TORCS$Dir>.TORCS <TORCS$Options>
