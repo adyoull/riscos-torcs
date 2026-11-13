@@ -56,9 +56,21 @@ TLIBS="-lracescreens -lraceengine -lclient -lconfscreens -lrobottools -llearning
 # RISCOS_UNIXLIB first: the driver's -lunixlib then finds that library
 # before the toolchain's.
 ULIB=${RISCOS_UNIXLIB:+-L$RISCOS_UNIXLIB}
+# GLCOUNT=1 (diagnosis, not for releases): every GL function TORCS and plib
+# call is wrapped with a counter (tools/glcount-gen.sh), and the trace
+# (TORCS$Trace) writes the counts.
+GLC=
+if [ -n "${GLCOUNT:-}" ]; then
+  "$RT_DIR/tools/glcount-gen.sh" src/linux/glcount \
+    src/linux/main.o src/linux/riscosspec.o src/linux/riscosplatform.o $MODOBJS \
+    export/lib/*.a "$STAGE"/lib/libplib*.a
+  arm-riscos-gnueabihf-gcc -c src/linux/glcount/glcount.s -o src/linux/glcount/glcount_s.o
+  arm-riscos-gnueabihf-gcc $RISCOS_CFLAGS -c src/linux/glcount/glcount.c -o src/linux/glcount/glcount_c.o
+  GLC="src/linux/glcount/glcount_s.o src/linux/glcount/glcount_c.o $(tr '\n' ' ' < src/linux/glcount/glcount.ld)"
+fi
 arm-riscos-gnueabihf-g++ -static $ULIB -o src/linux/torcs \
   src/linux/main.o src/linux/riscosspec.o src/linux/riscosplatform.o src/linux/riscos_modtab.o \
-  $MODOBJS \
+  $MODOBJS $GLC \
   -Lexport/lib -L"$STAGE/lib" -L"$RISCOS_DEVKIT/lib" \
   -Wl,--start-group $TLIBS -Wl,--end-group \
   -lplibssgaux -lplibssg -lplibsg -lplibsl -lplibsm -lplibjs -lplibul \
@@ -84,7 +96,7 @@ if [ -n "${MIXED:-}" ]; then
   STUBS=$(arm-riscos-gnueabihf-gcc -print-file-name=mixed-stubs)
   arm-riscos-gnueabihf-g++ -rdynamic -Wl,-rpath-link="$STUBS" -o src/linux/torcs-mixed \
     src/linux/main.o src/linux/riscosspec.o src/linux/riscosplatform.o src/linux/riscos_modtab.o \
-    $MODOBJS \
+    $MODOBJS $GLC \
     -Lexport/lib -L"$STAGE/lib" -L"$RISCOS_DEVKIT/lib/shared" -L"$RISCOS_DEVKIT/lib" \
     -Wl,--start-group $TLIBS -Wl,--end-group \
     -lplibssgaux -lplibssg -lplibsg -lplibsl -lplibsm -lplibjs -lplibul \

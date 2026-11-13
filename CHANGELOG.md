@@ -16,6 +16,11 @@
   the race loading: each loading-screen message, the scene's steps and
   each texture. `TRACE=1 build/package.sh` makes a test zip with the
   trace on.
+- `GLCOUNT=1 build/build-torcs.sh` (diagnosis only) wraps every GL
+  function TORCS and plib call with a counter (`tools/glcount-gen.sh`),
+  and the trace writes the counts after the background, after the track
+  model and every 100 frames, marking the calls that wait for an answer
+  (patch 0017).
 - Linked with riscos-mesa 20.3.5-19 (was 20.3.5-18): where the RISC3D
   module has a driver (RISC OS on Linux with riscos-risc3d on a Pi 4),
   OpenGL is drawn by the GPU; `LIBGL_ALWAYS_SOFTWARE` keeps it in software.

@@ -1,0 +1,94 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Fri, 13 Nov 2026 21:23:12 +0000
+Subject: [PATCH] RISC OS: GL call counts in the trace, when counting is linked
+ in
+
+test3's trace showed the race-start "lock-up" is the track loading
+through RISC3D: 460 s, slower between each texture, then 7.9 fps. RISC3D
+asked how many GL calls TORCS makes and of what kind.
+
+riscosTraceGL(label, frames) calls riscos_glcount_report() if a build
+has it (riscos-torcs build-torcs.sh GLCOUNT=1 wraps every GL function
+with a counter; the symbol is weak, so other builds are unchanged):
+after the background, after the track model, and every 100 frames.
+---
+ src/libs/tgf/riscostrace.cpp             | 17 +++++++++++++++++
+ src/libs/tgf/tgf.h                       |  1 +
+ src/modules/graphic/ssggraph/grscene.cpp |  2 ++
+ 3 files changed, 20 insertions(+)
+
+diff --git a/src/libs/tgf/riscostrace.cpp b/src/libs/tgf/riscostrace.cpp
+index ac10ed3..a73ec97 100644
+--- a/src/libs/tgf/riscostrace.cpp
++++ b/src/libs/tgf/riscostrace.cpp
+@@ -14,6 +14,9 @@
+       made no progress for 5 seconds, and again every 10 seconds. If the
+       main thread is stuck inside a SWI, the watchdog can't run either,
+       so the log then just stops at the last stage.
++    With GL call counting linked in (build-torcs.sh GLCOUNT=1),
++    riscosTraceGL() writes the GL calls made since the last report: every
++    100 frames, and where the race loading calls it.
+     riscosNoSound() is true if TORCS$NoSound is set: the menu music and
+     the race sound are then left off (OpenAL isn't started).
+ 
+@@ -42,6 +45,9 @@
+ 
+ int riscosTraceOn = 0;
+ 
++/* A build with GL call counting (build-torcs.sh GLCOUNT=1) has this. */
++extern "C" void riscos_glcount_report(const char *label, unsigned frames) __attribute__((weak));
++
+ static volatile unsigned traceSeq;		/* changes whenever the main thread reports */
+ static const char * volatile traceStage = "start";
+ static volatile unsigned traceFrames;
+@@ -109,6 +115,17 @@ riscosTraceFrame(const char *where)
+ 	traceSeq++;
+ 	if (riscosTraceOn && (n <= 5 || n % 100 == 0)) {
+ 		riscosTrace("%s: frame %u", where, n);
++		if (n % 100 == 0) {
++			riscosTraceGL("the last 100 frames", 100);
++		}
++	}
++}
++
++void
++riscosTraceGL(const char *label, unsigned frames)
++{
++	if (riscosTraceOn && riscos_glcount_report != NULL) {
++		riscos_glcount_report(label, frames);
+ 	}
+ }
+ 
+diff --git a/src/libs/tgf/tgf.h b/src/libs/tgf/tgf.h
+index d4cd9eb..7f26b99 100644
+--- a/src/libs/tgf/tgf.h
++++ b/src/libs/tgf/tgf.h
+@@ -631,6 +631,7 @@ extern void riscosTraceInit(void);
+ extern void riscosTrace(const char *fmt, ...);
+ extern void riscosTraceStage(const char *stage);
+ extern void riscosTraceFrame(const char *where);
++extern void riscosTraceGL(const char *label, unsigned frames);
+ extern int riscosNoSound(void);
+ 
+ #define GF_DIR_CREATION_FAILED 0
+diff --git a/src/modules/graphic/ssggraph/grscene.cpp b/src/modules/graphic/ssggraph/grscene.cpp
+index c69b5bc..ff19a3a 100644
+--- a/src/modules/graphic/ssggraph/grscene.cpp
++++ b/src/modules/graphic/ssggraph/grscene.cpp
+@@ -227,6 +227,7 @@ grLoadScene(tTrack *track)
+ 	riscosTraceStage("scene: initBackground");
+ 	initBackground();
+ 	riscosTrace("scene: background done");
++	riscosTraceGL("start-up and the background", 0);
+ 
+ 	grWrldX = (int)(track->max.x - track->min.x + 1);
+ 	grWrldY = (int)(track->max.y - track->min.y + 1);
+@@ -247,6 +248,7 @@ grLoadScene(tTrack *track)
+ 	riscosTraceStage("scene: grssgLoadAC3D (track model and its textures)");
+ 	desc = grssgLoadAC3D(acname, NULL);
+ 	riscosTrace("scene: track model loaded");
++	riscosTraceGL("loading the track model", 0);
+ 	if (desc == NULL) {
+ 		/* The track's 3D file is missing: addKid(NULL) would crash. */
+ 		GfOut("grscene: no 3D description %s for track %s\n", acname, grTrack->internalname);
