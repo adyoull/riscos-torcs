@@ -79,6 +79,23 @@ s = open(run).read()
 cut = s.index("| The program (about 20 MB)")
 open(run, "w").write(s[:cut] + add)
 PY
+  # PRIVATE_LIBS="lib.so..." (tests only): copies of shared libraries in
+  # !TORCS.lib, found before !MesaLibs's (LD_LIBRARY_PATH with ";"), so a
+  # test library can be tried without changing the installed !MesaLibs.
+  if [ -n "${PRIVATE_LIBS:-}" ]; then
+    mkdir -p "$APP/lib"
+    for l in $PRIVATE_LIBS; do cp "$l" "$APP/lib/$(basename "${l%,e1f}"),e1f"; done
+    python3 - "$APP/!Run,feb" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p).read()
+a = 'Set TORCS$LD$Env "LD_LIBRARY_PATH=/MesaLibs:"\n'
+b = ('| Test build: the libraries in !TORCS.lib come first.\n'
+     'Set TORCSLibs$Path <TORCS$Dir>.lib.\n'
+     'Set TORCS$LD$Env "LD_LIBRARY_PATH=/TORCSLibs:;/MesaLibs:"\n')
+assert s.count(a) == 1
+open(p, "w").write(s.replace(a, b))
+PY
+  fi
   PROG="$APP/TORCS,e1f"; ZIP=TORCS-$VERSION-mixed
 fi
 
