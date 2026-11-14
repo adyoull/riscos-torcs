@@ -103,7 +103,7 @@ if [ -n "${MIXED:-}" ]; then
   [ -d "$RISCOS_DEVKIT/lib/shared" ] ||
     { echo "MIXED: the devkit has no lib/shared (riscos-mesa 20.3.5-19 or later)" >&2; exit 1; }
   STUBS=$(arm-riscos-gnueabihf-gcc -print-file-name=mixed-stubs)
-  arm-riscos-gnueabihf-g++ -rdynamic -Wl,-rpath-link="$STUBS" -o src/linux/torcs-mixed \
+  arm-riscos-gnueabihf-g++ -rdynamic -Wl,-rpath-link="$STUBS" $ULIB -o src/linux/torcs-mixed \
     src/linux/main.o src/linux/riscosspec.o src/linux/riscosplatform.o src/linux/riscos_modtab.o \
     $MODOBJS $GLC \
     -Lexport/lib -L"$STAGE/lib" -L"$RISCOS_DEVKIT/lib/shared" -L"$RISCOS_DEVKIT/lib" \
@@ -112,6 +112,7 @@ if [ -n "${MIXED:-}" ]; then
     -lglut -lGLU -lalut -lopenal -lSDL2 -lEGL -lOSMesa \
     -lvorbisfile -lvorbis -logg -lpng16 -lz -ldl -lm \
     -Wl,-Map=src/linux/torcs-mixed.map
+  grep -o '[^ (]*libunixlib\.a' src/linux/torcs-mixed.map | sort -u | sed 's/^/UnixLib (mixed): /'
   python3 "$RT_DIR/tools/check-stack-probes.py" src/linux/torcs-mixed
   ls -l src/linux/torcs-mixed
 fi
