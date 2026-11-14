@@ -21,6 +21,10 @@
   and the trace writes the counts after the background, after the track
   model and every 100 frames, marking the calls that wait for an answer
   (patch 0017).
+- `FDTRACE=1 build/build-torcs.sh` (diagnosis only) logs calls on file
+  descriptors that fail with EBADF, with their callers
+  (`tools/fdtrace.c`, `ld --wrap`): ROL found TORCS's track loading on the
+  Pi spending its time in about 13,500 such calls a second.
 - Linked with riscos-mesa 20.3.5-19 (was 20.3.5-18): where the RISC3D
   module has a driver (RISC OS on Linux with riscos-risc3d on a Pi 4),
   OpenGL is drawn by the GPU; `LIBGL_ALWAYS_SOFTWARE` keeps it in software.

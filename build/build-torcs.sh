@@ -68,6 +68,15 @@ if [ -n "${GLCOUNT:-}" ]; then
   arm-riscos-gnueabihf-gcc $RISCOS_CFLAGS -c src/linux/glcount/glcount.c -o src/linux/glcount/glcount_c.o
   GLC="src/linux/glcount/glcount_s.o src/linux/glcount/glcount_c.o $(tr '\n' ' ' < src/linux/glcount/glcount.ld)"
 fi
+# FDTRACE=1 (diagnosis, not for releases): calls on file descriptors that
+# fail with EBADF are logged with their callers (tools/fdtrace.c).
+if [ -n "${FDTRACE:-}" ]; then
+  arm-riscos-gnueabihf-gcc $RISCOS_CFLAGS -fno-omit-frame-pointer -c "$RT_DIR/tools/fdtrace.c" -o src/linux/fdtrace.o
+  for f in read write close fstat fcntl isatty ioctl select dup dup2 lseek poll fsync; do
+    GLC="$GLC -Wl,--wrap=$f"
+  done
+  GLC="$GLC src/linux/fdtrace.o"
+fi
 arm-riscos-gnueabihf-g++ -static $ULIB -o src/linux/torcs \
   src/linux/main.o src/linux/riscosspec.o src/linux/riscosplatform.o src/linux/riscos_modtab.o \
   $MODOBJS $GLC \
