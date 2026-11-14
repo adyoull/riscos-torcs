@@ -15,3 +15,4 @@
 0015-RISC-OS-the-texture-size-check-can-t-loop-for-ever-r.patch
 0016-RISC-OS-the-trace-follows-race-loading-texture-by-te.patch
 0017-RISC-OS-GL-call-counts-in-the-trace-when-counting-is.patch
+0018-RISC-OS-trace-texture-upload-errors-TORCS-NoMipmaps.patch

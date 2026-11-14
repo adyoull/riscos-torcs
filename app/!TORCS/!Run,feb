@@ -44,6 +44,8 @@ Unset TORCS$Options
 |   TORCS$NoSound  no sound at all (OpenAL isn't started)
 | Set TORCS$Trace 1
 | Set TORCS$NoSound 1
+|   TORCS$NoMipmaps  textures without mipmaps (for finding faults)
+| Set TORCS$NoMipmaps 1
 
 | The program (about 20 MB) is loaded into the slot; its heap goes in
 | dynamic areas ("TORCS Heap").

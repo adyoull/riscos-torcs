@@ -21,6 +21,9 @@
   and the trace writes the counts after the background, after the track
   model and every 100 frames, marking the calls that wait for an answer
   (patch 0017).
+- The trace also logs OpenGL errors from the first 40 texture uploads,
+  and `*Set TORCS$NoMipmaps 1` loads textures without mipmaps, for
+  finding faults (patch 0018).
 - `FDTRACE=1 build/build-torcs.sh` (diagnosis only) logs calls on file
   descriptors that fail with EBADF, with their callers
   (`tools/fdtrace.c`, `ld --wrap`): ROL found TORCS's track loading on the

@@ -1,0 +1,91 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Sat, 14 Nov 2026 13:31:28 +0000
+Subject: [PATCH] RISC OS: trace texture upload errors; TORCS$NoMipmaps
+
+Through RISC3D on ROL (test8) the track and cars came out untextured
+while TORCS's own single-level textures (menus, gauges) were fine.
+Track and car textures go through grMakeMipMaps: one glTexImage2D per
+CPU-made mipmap level, internalformat 3 or 4. If any level doesn't
+arrive, the texture is incomplete and draws as if untextured.
+
+With TORCS$Trace on, the first 40 textures are followed by glGetError,
+logged with size, format and levels made. TORCS$NoMipmaps makes
+doMipMap answer no for every texture (level 0 only, GL_LINEAR), to tell
+a mipmap-chain fault from an upload fault.
+---
+ src/libs/tgf/riscostrace.cpp               | 14 ++++++++++++++
+ src/libs/tgf/tgf.h                         |  1 +
+ src/modules/graphic/ssggraph/grtexture.cpp | 15 +++++++++++++++
+ 3 files changed, 30 insertions(+)
+
+diff --git a/src/libs/tgf/riscostrace.cpp b/src/libs/tgf/riscostrace.cpp
+index a73ec97..c9d5957 100644
+--- a/src/libs/tgf/riscostrace.cpp
++++ b/src/libs/tgf/riscostrace.cpp
+@@ -169,6 +169,20 @@ riscosTraceInit(void)
+ 	pthread_attr_destroy(&a);
+ }
+ 
++int
++riscosNoMipmaps(void)
++{
++	static int noMipmaps = -1;
++	if (noMipmaps < 0) {
++		const char *v = getenv("TORCS$NoMipmaps");
++		noMipmaps = (v != NULL && *v != 0);
++		if (noMipmaps) {
++			riscosTrace("textures without mipmaps (TORCS$NoMipmaps)");
++		}
++	}
++	return noMipmaps;
++}
++
+ int
+ riscosNoSound(void)
+ {
+diff --git a/src/libs/tgf/tgf.h b/src/libs/tgf/tgf.h
+index 7f26b99..bf35e94 100644
+--- a/src/libs/tgf/tgf.h
++++ b/src/libs/tgf/tgf.h
+@@ -633,6 +633,7 @@ extern void riscosTraceStage(const char *stage);
+ extern void riscosTraceFrame(const char *where);
+ extern void riscosTraceGL(const char *label, unsigned frames);
+ extern int riscosNoSound(void);
++extern int riscosNoMipmaps(void);
+ 
+ #define GF_DIR_CREATION_FAILED 0
+ #define GF_DIR_CREATED 1
+diff --git a/src/modules/graphic/ssggraph/grtexture.cpp b/src/modules/graphic/ssggraph/grtexture.cpp
+index 3d8c539..0c80a0c 100644
+--- a/src/modules/graphic/ssggraph/grtexture.cpp
++++ b/src/modules/graphic/ssggraph/grtexture.cpp
+@@ -28,6 +28,11 @@
+ 
+ bool doMipMap(const char *tfname, int mipmap)
+ {
++	/* RISC OS diagnosis: TORCS$NoMipmaps loads every texture without
++	   mipmaps (level 0 only, GL_LINEAR). */
++	if (riscosNoMipmaps()) {
++		return FALSE;
++	}
+ 	char *buf = (char *) malloc(strlen(tfname)+1);
+ 	strcpy(buf, tfname);
+ 
+@@ -447,6 +452,16 @@ bool grMakeMipMaps (GLubyte *image, int xsize, int ysize, int zsize, bool mipmap
+ 		map_level++ ;
+ 		delete [] texels[i];
+ 	}
++	/* Trace: OpenGL errors from the first 40 textures' uploads (one
++	   glGetError each, so only with TORCS$Trace on). */
++	if (riscosTraceOn) {
++		static int checked;
++		if (checked++ < 40) {
++			GLenum e = glGetError();
++			riscosTrace("  uploaded %dx%d z%d format %#x, %d level(s) made: glGetError %#x%s", xsize, ysize, zsize,
++			            (unsigned)textureTargetFormat, map_level, (unsigned)e, e == GL_NO_ERROR ? "" : " (ERROR)");
++		}
++	}
+ 	riscosTraceStage("texture: uploaded, back in the model loader");
+ 
+ 	return true;
