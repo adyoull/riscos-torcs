@@ -1,6 +1,25 @@
 # Changelog
 
-## Unreleased (1.3.7-riscos6)
+## 1.3.7-riscos6 (2026-11-16)
+
+- **Released as a "mixed" program only:** `TORCS,e1f` (4 MB, an ELF run
+  by !SharedLibs) has UnixLib and TORCS's own libraries linked in and
+  loads OpenGL, EGL, GLU, freeglut, SDL 2 and OpenAL from riscos-mesa's
+  !MesaLibs (20.3.5-20 or later) in !Boot.Resources. The static build is
+  still made and checked by the GitHub build, but not released.
+- **The GPU, where RISC3D can use it:** linked with riscos-mesa 20.3.5-20
+  and `-lMesaGPU`, so with !RISC3D installed TORCS draws on the GPU of a
+  Pi 4, natively (through !MesaLibs' libMesaGPU) and under RISC OS on
+  Linux. RISC3D chooses the backend; TORCS names no driver. `!Run` loads
+  RISC3D from !RISC3D when it's installed, and needs nothing else for it.
+  `MESAGPU=0 build/build-torcs.sh` links without libMesaGPU.
+- **Built with UnixLib 5.0.3.10** (linked in with `RISCOS_UNIXLIB`; was
+  5.0.3.6): a bad file descriptor no longer costs a SWI. TORCS's XML
+  reader (sscanf) tried one about 13,500 times a second, and under RISC
+  OS on Linux, where each SWI traps, loading a track took minutes; it now
+  takes about 4 seconds.
+- Under RISC OS on Linux with RISC3D on a Pi 4, the race runs at about
+  24-30 fps (about 10 fps in software).
 
 - Starting a race can no longer hang in the texture size check (patch
   0015): it halved each texture until OpenGL's proxy texture reported a
@@ -28,18 +47,16 @@
   descriptors that fail with EBADF, with their callers
   (`tools/fdtrace.c`, `ld --wrap`): ROL found TORCS's track loading on the
   Pi spending its time in about 13,500 such calls a second.
-- Linked with riscos-mesa 20.3.5-19 (was 20.3.5-18): where the RISC3D
-  module has a driver (RISC OS on Linux with riscos-risc3d on a Pi 4),
-  OpenGL is drawn by the GPU; `LIBGL_ALWAYS_SOFTWARE` keeps it in software.
-  Elsewhere drawing is the same as before.
+- The test builds were linked with riscos-mesa 20.3.5-19 (was 20.3.5-18),
+  the first with RISC3D: where it has a driver, OpenGL is drawn by the
+  GPU; `LIBGL_ALWAYS_SOFTWARE` keeps it in software.
 - A mixed build as well as the static one: `MIXED=1 build/build-torcs.sh`
   links `src/linux/torcs-mixed` (UnixLib, libstdc++, plib, freealut,
   libpng, Ogg Vorbis and zlib linked in; OpenGL, EGL, GLU, freeglut, SDL 2
   and OpenAL from !MesaLibs), and `MIXED=1 build/package.sh` makes
   `TORCS-<version>-mixed.zip`, with `TORCS,e1f` and the `!Run` ending in
   `riscos/mixed-run`. The program is 4 MB against 13.5 MB.
-- Built with riscos-crossdev 1.11 (UnixLib 5.0.3.7), as riscos-mesa
-  20.3.5-19 is, and with its PThreadTicker 0.04 (`!Run` loads 0.04 or
+- Built with riscos-crossdev 1.11's toolchain, and with PThreadTicker 0.04 (`!Run` loads 0.04 or
   later, and stops with an error if an older one is already loaded).
 - The GitHub build makes and checks both (`check-mixed-package.sh` against
   the devkit's !MesaLibs).

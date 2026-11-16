@@ -13,15 +13,17 @@ Requirements
   SharedSoundBuffer (ssb.zip from orac.co.uk). Without them TORCS is
   silent.
 - About 64 MB of free memory.
-- The "mixed" download only: !SharedLibs with ld-riscos/so/2 (GCCSDK 8 or
-  later, as in Iris) and !MesaLibs (riscos-mesa 20.3.5-19 or later), both
-  in !Boot.Resources. Its program is much smaller, and it shares the
-  OpenGL, SDL and OpenAL libraries with other programs that use
-  !MesaLibs. After installing a new !MesaLibs, restart the machine.
+- !SharedLibs with ld-riscos/so/2 (GCCSDK 8 or later, as in Iris) and
+  !MesaLibs (riscos-mesa 20.3.5-20 or later), both in !Boot.Resources.
+  TORCS is a "mixed" program: it loads OpenGL, SDL and OpenAL from
+  !MesaLibs, shared with other programs that use it. After installing a
+  new !MesaLibs, restart the machine.
+- For the GPU: !RISC3D in !Boot.Resources (optional).
 
-Where the RISC3D module has a driver (today RISC OS on Linux with the
-riscos-risc3d package, on a Raspberry Pi 4), TORCS draws with the GPU.
-*Set LIBGL_ALWAYS_SOFTWARE 1 before starting it keeps it in software.
+Where RISC3D is installed and has a graphics driver for the machine (a
+Raspberry Pi 4, under RISC OS 5 or RISC OS on Linux), TORCS draws with
+the GPU; RISC3D decides this, not TORCS. *Set LIBGL_ALWAYS_SOFTWARE 1
+before starting it keeps it in software.
 Everywhere else everything is drawn by software OpenGL (riscos-mesa) on
 the CPU, so the fewer pixels it draws, the faster it runs. TORCS opens in a desktop
 window 540 pixels high, in the screen's shape (960x540 on a 16:9

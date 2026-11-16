@@ -39,11 +39,13 @@ TRACKS_PACK=TORCS-tracks-1.3.7 build/package.sh 1.3.7-riscosN   # -> dist/TORCS-
 ```
 
 For the mixed build as well (riscos-mesa 20.3.5-19 or later, riscos-crossdev
-1.11 or later):
+1.11 or later; with 20.3.5-20 or later it also links libMesaGPU, the GPU on
+native RISC OS, unless `MESAGPU=0`). Releases from 1.3.7-riscos6 are the
+mixed build only:
 
 ```sh
 MIXED=1 build/build-torcs.sh   # also work/torcs/src/linux/torcs-mixed
-MIXED=1 build/package.sh 1.3.7-riscosN   # -> dist/TORCS-1.3.7-riscosN-mixed.zip
+MIXED=1 TRACKS_PACK=TORCS-tracks-1.3.7 build/package.sh 1.3.7-riscosN   # -> dist/TORCS-1.3.7-riscosN-mixed.zip
 build/check-mixed.sh           # riscos-crossdev check-all and check-mixed-package (RCD_DIR)
 ```
 
@@ -60,7 +62,13 @@ two cores.
 makes `dist/NAME.zip`, the tracks pack: every other track, in a
 `TORCS-tracks/!TORCS/tracks` tree to copy over the application, with
 `riscos/TracksPack-ReadMe`. The release uses
-`TRACKS_PACK=TORCS-tracks-1.3.7 build/package.sh 1.3.7-riscosN`.
+`MIXED=1 TRACKS_PACK=TORCS-tracks-1.3.7 build/package.sh 1.3.7-riscosN`,
+and its zip is published as `TORCS-1.3.7-riscosN.zip`.
+
+1.3.7-riscos6 was built with the riscos-crossdev 1.11 toolchain, UnixLib
+5.0.3.10's release `libunixlib.a` as `RISCOS_UNIXLIB`, and the riscos-mesa
+20.3.5-20 devkit (`.riscos-deps` then still named the published 20.3.5-19;
+the GitHub update workflow moves it when 20.3.5-20 is released).
 
 ## The patch series
 

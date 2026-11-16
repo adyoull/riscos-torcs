@@ -7,11 +7,14 @@ free-software TORCS 1.3.7 source (`torcs_1.3.7+dfsg`), plus the scripts that
 cross-build it and the RISC OS application files. It doesn't contain TORCS
 itself: `build/fetch.sh` downloads the sources and checks them.
 
-Status: **release 1.3.7-riscos5**. On a Raspberry Pi 4 it runs at
-about 10 fps in its default 960x540 desktop window, with the 3D scene drawn
-at half size under full-size writing (software OpenGL on the CPU). Nine
-tracks are included, and a tracks pack adds the other 29; you race alone
-by default (computer drivers can be added). See `CHANGELOG.md` for the test builds before it.
+Status: **release 1.3.7-riscos6**, a "mixed" program that loads OpenGL,
+SDL 2 and OpenAL from riscos-mesa's !MesaLibs. Where RISC3D has a driver
+for the GPU (a Raspberry Pi 4, natively or under RISC OS on Linux) it draws
+on the GPU; otherwise in software on the CPU, at about 10 fps on a Pi 4 in
+its default 960x540 desktop window, with the 3D scene drawn at half size
+under full-size writing. Nine tracks are included, and a tracks pack adds
+the other 29; you race alone by default (computer drivers can be added).
+See `CHANGELOG.md` for the test builds before it.
 
 AI (Anthropic's Claude) has been used as a coding assistant on this port.
 
@@ -19,8 +22,10 @@ AI (Anthropic's Claude) has been used as a coding assistant on this port.
 
 - **Graphics:** TORCS draws with fixed-function OpenGL 1.x through GLUT and
   plib's ssg. On RISC OS that's riscos-mesa's freeglut with its native RISC OS
-  back end, which draws through riscos-mesa's EGL into a Wimp window (software
-  OpenGL: classic OSMesa). There is no X11 or GLX.
+  back end, which draws through riscos-mesa's EGL into a Wimp window: on the
+  GPU where RISC3D can (riscos-mesa's libMesaGPU natively, Linux's Mesa under
+  RISC OS on Linux), otherwise software OpenGL (classic OSMesa). There is no
+  X11 or GLX.
 - **Sound:** OpenAL (riscos-mesa devkit) → SDL 2 audio → SharedSoundBuffer.
   Engine and tyre sounds load through freealut. Menu music is Ogg Vorbis.
 - **Modules:** TORCS loads its graphics engine, physics, track loader and every
