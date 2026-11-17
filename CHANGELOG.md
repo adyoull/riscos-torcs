@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased (1.3.7-riscos7)
+
+- **No more abort at the start of a race with some Joystick modules**
+  (plib patch 11). TORCS looks for joysticks when a race starts. On a
+  user's Pi 4 a Joystick module answered USBJoystick's newer
+  Joystick_AxisInfo call with an address that wasn't there, and TORCS
+  aborted in memcpy (&31AF50 in riscos6). Every record a Joystick module
+  returns is now checked (sizes, counts, and OS_ValidateAddress) before
+  it's read; if any answer can't be used, stick 0 is read with the
+  standard Joystick_Read instead. `*Set TORCS$Joystick off` ignores
+  joysticks, `*Set TORCS$Joystick stable` uses Joystick_Read only.
+- `tests/joystick/run.sh`: plib's RISC OS joystick code against a
+  pretend Joystick module (good answers, a bad address, no module, a
+  huge count, both settings), in the GitHub build.
+
 ## 1.3.7-riscos6 (2026-11-16)
 
 - **Released as a "mixed" program only:** `TORCS,e1f` (4 MB, an ELF run

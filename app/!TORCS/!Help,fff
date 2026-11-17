@@ -69,7 +69,10 @@ Driving (keyboard, the default):
   Escape                the race menu (abandon, restart...)
 
 Configure Players sets your name, car and controls; a USB joystick
-works through USBJoystick (0.23 or later) or any Joystick module.
+works through USBJoystick (0.23 or later) or any Joystick module. If a
+joystick gives trouble, *Set TORCS$Joystick stable (before starting
+TORCS) reads only the first stick, with the standard Joystick_Read, and
+*Set TORCS$Joystick off ignores joysticks altogether.
 
 Options
 -------

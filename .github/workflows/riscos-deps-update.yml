@@ -36,7 +36,7 @@ permissions:
   pull-requests: write
 
 env:
-  BUILD: build/fetch.sh && build/build-deps.sh && MIXED=1 build/build-torcs.sh && "$RCD_DIR/checks/check-all.sh" work/torcs/src/linux/torcs && build/check-mixed.sh && build/package.sh ci && MIXED=1 build/package.sh ci && tests/qemu/build.sh && tests/qemu/run.sh forza road 1   # the same as in riscos-build.yml
+  BUILD: build/fetch.sh && build/build-deps.sh && MIXED=1 build/build-torcs.sh && "$RCD_DIR/checks/check-all.sh" work/torcs/src/linux/torcs && build/check-mixed.sh && build/package.sh ci && MIXED=1 build/package.sh ci && tests/joystick/run.sh && tests/qemu/build.sh && tests/qemu/run.sh forza road 1   # the same as in riscos-build.yml
   PACKAGES: ""                   # the same as in riscos-build.yml
 
 jobs:

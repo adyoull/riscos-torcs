@@ -1,0 +1,209 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Andrew Youll <andrewyoull86@gmail.com>
+Date: Tue, 17 Nov 2026 19:29:39 +0000
+Subject: [PATCH] RISC OS joysticks: check the Joystick module's answers before
+ reading them
+
+USBJoystick's slot API (Joystick_Enumerate, _DeviceInfo, _AxisInfo,
+_AxisValues) is a draft, and another Joystick module answered
+Joystick_AxisInfo with a pointer to unmapped memory: TORCS aborted in
+memcpy when a race started (jsJoystick::open). Sizes and counts are now
+checked, and every record is read only if OS_ValidateAddress says it's
+mapped. If an answer can't be used, the slot API isn't used again and
+stick 0 is read with Joystick_Read. TORCS$Joystick "off" turns joysticks
+off, "stable" uses Joystick_Read only.
+---
+ src/js/jsRISCOS.cxx | 120 +++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 112 insertions(+), 8 deletions(-)
+
+diff --git a/src/js/jsRISCOS.cxx b/src/js/jsRISCOS.cxx
+index 79ddd00..8f71e0d 100644
+--- a/src/js/jsRISCOS.cxx
++++ b/src/js/jsRISCOS.cxx
+@@ -34,6 +34,14 @@
+      (&43F40, R0 = 256: 16-bit X and Y, 32 buttons).
+    - No Joystick module: no joysticks (notWorking()).
+ 
++   USBJoystick's slot API is a draft, and other Joystick modules may
++   answer its SWI numbers differently. So every record it returns is
++   checked before it's read: sizes and counts in range, and the memory
++   readable (OS_ValidateAddress). If anything is wrong, the slot API isn't
++   used again and stick 0 is read with Joystick_Read instead.
++   TORCS$Joystick (riscos-torcs): "off" for no joysticks, "stable" for
++   Joystick_Read only.
++
+    The SWI details follow the RISC OS port of YSFlight (riscos-ysflight,
+    ysjoystick/src/riscos/ysjoyreader.cpp).
+ */
+@@ -43,6 +51,8 @@
+ #if defined (UL_RISCOS)
+ 
+ #include <stdint.h>
++#include <stdlib.h>
++#include <string.h>
+ #include <kernel.h>
+ 
+ #define Joystick_Read        0x43F40
+@@ -50,6 +60,7 @@
+ #define Joystick_DeviceInfo  0x43F45
+ #define Joystick_AxisInfo    0x43F46
+ #define Joystick_AxisValues  0x43F47
++#define OS_ValidateAddress   0x3A
+ 
+ /* USBJoystick's axis types */
+ enum
+@@ -94,12 +105,51 @@ struct os_specific_s
+ } ;
+ 
+ 
++/* The slot API answered with something unusable: don't use it again. */
++static int jsRISCOSDraftFailed = 0 ;
++
++/* TORCS$Joystick: 0 = off, 1 = Joystick_Read only, 2 = either (default) */
++static int jsRISCOSChoice ( void )
++{
++  const char *v = getenv ( "TORCS$Joystick" ) ;
++  if ( v == NULL ) return 2 ;
++  if ( strcasecmp ( v, "off" ) == 0 ) return 0 ;
++  if ( strcasecmp ( v, "stable" ) == 0 ) return 1 ;
++  return 2 ;
++}
++
++/* 1 if len bytes from p can be read (mapped memory). */
++static int jsRISCOSReadable ( const void *p, unsigned int len )
++{
++  if ( p == NULL ) return 0 ;
++  uintptr_t a = (uintptr_t) p ;
++  if ( len == 0 ) len = 1 ;
++  if ( a + len < a ) return 0 ;
++  _kernel_swi_regs r ;
++  int carry = 0 ;
++  r.r[0] = (int) a ;
++  r.r[1] = (int) ( a + len ) ;
++  if ( _kernel_swi_c ( OS_ValidateAddress, &r, &r, &carry ) != NULL )
++    return 0 ;
++  return carry == 0 ;
++}
++
++static void jsRISCOSDraftFail ( const char *what )
++{
++  if ( ! jsRISCOSDraftFailed )
++    fprintf ( stderr, "Joystick: %s gave an answer that can't be used; "
++              "using Joystick_Read instead\n", what ) ;
++  jsRISCOSDraftFailed = 1 ;
++}
++
+ /* The slot of the n-th attached device, or -1. *api is set to 1 if the
+    slot API answered at all. */
+ static int jsRISCOSSlot ( int n, int *api )
+ {
+   _kernel_swi_regs r ;
+   *api = 0 ;
++  if ( jsRISCOSDraftFailed || jsRISCOSChoice () != 2 )
++    return -1 ;
+   if ( _kernel_swi ( Joystick_Enumerate, &r, &r ) != NULL )
+     return -1 ;
+   *api = 1 ;
+@@ -130,13 +180,20 @@ void jsJoystick::open ()
+   os->hat_x = os->hat_y = -1 ;
+   os->num_analogue = 0 ;
+ 
++  if ( jsRISCOSChoice () == 0 )
++    return ;
++
+   os->slot = jsRISCOSSlot ( id, &api ) ;
+ 
+   if ( os->slot < 0 )
+   {
++stable:
+     /* No slot API (or not that many devices): stick 0 by Joystick_Read,
+-       when no slot API exists at all. */
+-    if ( api || id != 0 )
++       when no slot API exists at all (or it misbehaved). */
++    os->slot = -1 ;
++    os->native = 0 ;
++    num_axes = num_buttons = 0 ;
++    if ( ( api && ! jsRISCOSDraftFailed ) || id != 0 )
+       return ;
+     r.r[0] = 256 ;
+     if ( _kernel_swi ( Joystick_Read, &r, &r ) != NULL )
+@@ -157,19 +214,56 @@ void jsJoystick::open ()
+ 
+   r.r[0] = os->slot ;
+   if ( _kernel_swi ( Joystick_DeviceInfo, &r, &r ) != NULL || r.r[2] == 0 )
+-    return ;
++  {
++    jsRISCOSDraftFail ( "Joystick_DeviceInfo" ) ;
++    goto stable ;
++  }
+   const UJDeviceInfo *dev = (const UJDeviceInfo *) r.r[2] ;
+-  snprintf ( name, sizeof(name), "%s",
+-             ( dev->product != NULL && dev->product[0] != '\0' ) ?
+-               dev->product : "USB joystick" ) ;
++  if ( ! jsRISCOSReadable ( dev, sizeof(UJDeviceInfo) ) ||
++       dev->size < sizeof(UJDeviceInfo) || dev->size > 4096 )
++  {
++    jsRISCOSDraftFail ( "Joystick_DeviceInfo" ) ;
++    goto stable ;
++  }
++  strcpy ( name, "USB joystick" ) ;
++  if ( jsRISCOSReadable ( dev->product, 1 ) && dev->product[0] != '\0' )
++  {
++    /* Copied a character at a time, each checked: the name's length
++       isn't known. */
++    size_t i = 0 ;
++    while ( i < sizeof(name) - 1 && jsRISCOSReadable ( dev->product + i, 1 ) &&
++            dev->product [ i ] != '\0' )
++    {
++      name [ i ] = dev->product [ i ] ;
++      i++ ;
++    }
++    name [ i ] = '\0' ;
++  }
+   num_buttons = (int) dev->num_buttons ;
++  if ( num_buttons < 0 ) num_buttons = 0 ;
+   if ( num_buttons > _JS_MAX_BUTTONS )
+     num_buttons = _JS_MAX_BUTTONS ;
+ 
+   r.r[0] = os->slot ;
+-  if ( _kernel_swi ( Joystick_AxisInfo, &r, &r ) != NULL || r.r[3] == 0 ||
+-       r.r[1] < (int) sizeof(UJAxisInfo) )
++  if ( _kernel_swi ( Joystick_AxisInfo, &r, &r ) != NULL )
++  {
++    jsRISCOSDraftFail ( "Joystick_AxisInfo" ) ;
++    goto stable ;
++  }
++  if ( r.r[3] == 0 || r.r[2] == 0 )
++  {
++    /* Buttons only */
++    error = JS_FALSE ;
+     return ;
++  }
++  if ( r.r[1] < (int) sizeof(UJAxisInfo) || r.r[1] > 1024 ||
++       r.r[2] < 0 || r.r[2] > 64 ||
++       ! jsRISCOSReadable ( (const void *) r.r[3],
++                            (unsigned int) ( r.r[1] * r.r[2] ) ) )
++  {
++    jsRISCOSDraftFail ( "Joystick_AxisInfo" ) ;
++    goto stable ;
++  }
+   const int rec_size = r.r[1], n_axis = r.r[2] ;
+   const unsigned char *rec = (const unsigned char *) r.r[3] ;
+ 
+@@ -285,6 +379,16 @@ void jsJoystick::rawRead ( int *buttons, float *axes )
+   }
+   const int val_size = r.r[1], n_axis = r.r[2] ;
+   const unsigned char *val = (const unsigned char *) r.r[3] ;
++  if ( val_size < 4 || val_size > 64 || n_axis < 0 || n_axis > 64 ||
++       ! jsRISCOSReadable ( val, (unsigned int) ( val_size * n_axis ) ) )
++  {
++    /* Unusable: centred and released */
++    if ( buttons ) *buttons = 0 ;
++    if ( axes )
++      for ( int i = 0 ; i < num_axes ; i++ )
++        axes [ i ] = center [ i ] ;
++    return ;
++  }
+ 
+   if ( buttons )
+   {

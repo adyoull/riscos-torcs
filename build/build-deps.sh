@@ -63,7 +63,7 @@ fi
 if [ ! -d plib-1.8.5 ]; then
   tar xf "$DL/plib_1.8.5.orig.tar.gz"
   for p in 04_CVE-2011-4620.diff 05_CVE-2012-4552.diff 08_CVE-2021-38714.patch \
-           10-riscos-platform.patch; do
+           10-riscos-platform.patch 11-riscos-joystick-checks.patch; do
     patch -d plib-1.8.5 -p1 -s < "$RT_DIR/patches/plib/$p"
   done
 fi
