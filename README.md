@@ -7,10 +7,10 @@ free-software TORCS 1.3.7 source (`torcs_1.3.7+dfsg`), plus the scripts that
 cross-build it and the RISC OS application files. It doesn't contain TORCS
 itself: `build/fetch.sh` downloads the sources and checks them.
 
-Status: **release 1.3.7-riscos6**, a "mixed" program that loads OpenGL,
+Status: **release 1.3.7-riscos7**, a "mixed" program that loads OpenGL,
 SDL 2 and OpenAL from riscos-mesa's !MesaLibs. Where RISC3D has a driver
 for the GPU (a Raspberry Pi 4, natively or under RISC OS on Linux) it draws
-on the GPU; otherwise in software on the CPU, at about 10 fps on a Pi 4 in
+on the GPU (about 40-60 fps natively on a Pi 4); otherwise in software on the CPU, at about 10 fps on a Pi 4 in
 its default 960x540 desktop window, with the 3D scene drawn at half size
 under full-size writing. Nine tracks are included, and a tracks pack adds
 the other 29; you race alone by default (computer drivers can be added).

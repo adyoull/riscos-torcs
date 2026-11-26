@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (1.3.7-riscos7)
+## 1.3.7-riscos7 (2026-11-26)
 
 - **No more abort at the start of a race with some Joystick modules**
   (plib patch 11). TORCS looks for joysticks when a race starts. On a
