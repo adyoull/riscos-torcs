@@ -11,6 +11,14 @@
   it's read; if any answer can't be used, stick 0 is read with the
   standard Joystick_Read instead. `*Set TORCS$Joystick off` ignores
   joysticks, `*Set TORCS$Joystick stable` uses Joystick_Read only.
+- **Built with riscos-crossdev 1.14 (UnixLib 5.0.3.12) and riscos-mesa
+  20.3.5-23**, from `.riscos-deps` alone (riscos6 linked UnixLib 5.0.3.10
+  in by hand). UnixLib 5.0.3.12: `memcpy` and `setjmp` no longer die on
+  a stack's first touch, faster string functions, and `thread_local`
+  one per thread. riscos-mesa 20.3.5-22/23: RISC3D's allocated SWIs
+  (RISC3D 0.05 or later), and the GPU library closes its GPU file at
+  exit. `!Run` asks for !MesaLibs 20.3.5-22 or later and loads RISC3D
+  0.05 or later where !RISC3D is installed.
 - `tests/joystick/run.sh`: plib's RISC OS joystick code against a
   pretend Joystick module (good answers, a bad address, no module, a
   huge count, both settings), in the GitHub build.

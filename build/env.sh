@@ -1,7 +1,7 @@
 # Source this: . build/env.sh
 # Settings for the riscos-torcs build scripts. Each can be set first.
 #   RISCOS_TOOLCHAIN  riscos-crossdev's toolchain (GCCSDK GCC 10.2, UnixLib
-#                     5.0.3.3, static): set in the riscos-crossdev image
+#                     5.0.3.12 from 1.14, static): set in the riscos-crossdev image
 #   RISCOS_DEVKIT     the riscos-mesa devkit (OpenAL, freeglut, EGL). Used
 #                     only if it's the version .riscos-deps names; otherwise
 #                     the one build/fetch.sh downloads into $WORK is used

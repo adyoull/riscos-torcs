@@ -14,7 +14,7 @@ Requirements
   silent.
 - About 64 MB of free memory.
 - !SharedLibs with ld-riscos/so/2 (GCCSDK 8 or later, as in Iris) and
-  !MesaLibs (riscos-mesa 20.3.5-20 or later), both in !Boot.Resources.
+  !MesaLibs (riscos-mesa 20.3.5-22 or later), both in !Boot.Resources.
   TORCS is a "mixed" program: it loads OpenGL, SDL and OpenAL from
   !MesaLibs, shared with other programs that use it. After installing a
   new !MesaLibs, restart the machine.

@@ -8,13 +8,13 @@ The easy way is riscos-crossdev's container image, which has everything
 (the version is the `riscos-crossdev` line of `.riscos-deps`):
 
 ```sh
-docker run --rm -v "$PWD":/src ghcr.io/adyoull/riscos-crossdev:1.11 sh -c \
+docker run --rm -v "$PWD":/src ghcr.io/adyoull/riscos-crossdev:1.14 sh -c \
   'build/fetch.sh && build/build-deps.sh && build/build-torcs.sh && build/package.sh test'
 ```
 
 Without Docker:
 
-- **riscos-crossdev's toolchain** (GCCSDK GCC 10.2, UnixLib 5.0.3.7,
+- **riscos-crossdev's toolchain** (GCCSDK GCC 10.2, UnixLib 5.0.3.12,
   `elf2aif`, `qemu-arm-aligntrap`, the mixed-program stand-ins): the release named in
   `.riscos-deps` (its `toolchain/PREBUILT` names the tarball), installed
   with its `make prebuilt` or unpacked anywhere; set `RISCOS_TOOLCHAIN` to
@@ -69,6 +69,9 @@ and its zip is published as `TORCS-1.3.7-riscosN.zip`.
 5.0.3.10's release `libunixlib.a` as `RISCOS_UNIXLIB`, and the riscos-mesa
 20.3.5-20 devkit (`.riscos-deps` then still named the published 20.3.5-19;
 the GitHub update workflow moves it when 20.3.5-20 is released).
+From 1.3.7-riscos7 the release is built from `.riscos-deps` alone
+(riscos-crossdev 1.14 with UnixLib 5.0.3.12, riscos-mesa 20.3.5-23): no
+`RISCOS_UNIXLIB`.
 
 ## The patch series
 
