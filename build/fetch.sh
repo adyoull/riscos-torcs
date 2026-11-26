@@ -49,7 +49,9 @@ if [ ! -d "$TORCS_SRC" ]; then
   git tag upstream
   while read -r p; do
     [ -n "$p" ] || continue
-    git -c user.name="Andrew Youll" -c user.email=andrewyoull86@gmail.com am -q --keep-cr --committer-date-is-author-date "$RT_DIR/patches/torcs/$p"
+    # The patches carry their author; this local tree's committer is a
+    # placeholder (nothing in it is pushed).
+    git -c user.name=riscos-torcs -c user.email=build@invalid am -q --keep-cr --committer-date-is-author-date "$RT_DIR/patches/torcs/$p"
     echo "  applied $p"
   done < "$RT_DIR/patches/torcs/series"
 fi
